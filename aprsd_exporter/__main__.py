@@ -28,7 +28,7 @@ from .exporter import APRSDExporter
     "--port",
     metavar="<exporter port>",
     type=int,
-    default=9110,
+    default=8080,
     help="The port to expose collected metrics from. Default is 9110",
 )
 @click.option(
