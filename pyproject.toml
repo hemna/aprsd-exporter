@@ -123,7 +123,7 @@ optional-dependencies.dev = {file = ["./requirements-dev.txt"]}
 # The following would provide a command line executable called `sample`
 # which executes the function `main` from this package when invoked.
 [project.scripts]
-aprsd_exporter = "aprsd_exporter.main:main"
+aprsd_exporter = "aprsd_exporter.__main__:main"
 
 # If you are using a different build backend, you will need to change this.
 [tool.setuptools]
