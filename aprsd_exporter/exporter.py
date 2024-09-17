@@ -165,7 +165,7 @@ class APRSDExporter:
             self.callsign = stats['APRSDStats']['callsign']
             self.register_metrics()
             if self._metrics:
-                #self._update_aprsd_metrics(stats["APRSDStats"])
+                self._update_aprsd_metrics(stats["APRSDStats"])
                 self._update_packet_metrics(stats['PacketList'])
                 # if stats['APRSDThreadList']:
                 #     self._update_thread_metrics(stats['APRSDThreadList'])
@@ -178,13 +178,13 @@ class APRSDExporter:
         logger.info("_update_aprsd_metrics")
         logger.debug(f"aprsd_stats: {aprsd_stats}")
         self._metrics[APRSD_STATS]['aprsd'].set(
-            {'version': 'running'}, aprsd_stats['version']
+            {'version': aprsd_stats['version']}, 1.0
         )
         self._metrics[APRSD_STATS]['aprsd'].set(
-            {'uptime': 'running'}, aprsd_stats['uptime']
+            {'uptime': aprsd_stats['uptime']}, aprsd_stats['uptime']
         )
         self._metrics[APRSD_STATS]['aprsd'].set(
-            {'callsign': 'name'}, aprsd_stats['callsign']
+            {'callsign': aprsd_stats['callsign']}, 1.0
         )
         self._metrics[APRSD_STATS]['memory'].set(
             {'type': 'current'}, aprsd_stats['memory_current']
