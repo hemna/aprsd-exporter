@@ -60,8 +60,8 @@ class APRSDExporter:
                         'APRSD Stats',
                         const_labels=const_labels
                     ),
-                    'memory': Gauge(
-                        'memory',
+                    'aprsd_memory': Gauge(
+                        'aprsd_memory',
                         'APRSD Memory Usage',
                         const_labels=const_labels
                     ),
