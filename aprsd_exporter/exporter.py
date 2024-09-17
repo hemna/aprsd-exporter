@@ -167,12 +167,12 @@ class APRSDExporter:
             if self._metrics:
                 self._update_aprsd_metrics(stats["APRSDStats"])
                 self._update_packet_metrics(stats['PacketList'])
-                # if stats['APRSDThreadList']:
-                #     self._update_thread_metrics(stats['APRSDThreadList'])
-                # if stats['PluginManager']:
-                #     self._update_plugins_metrics(stats['PluginManager'])
-                # if stats['SeenList']:
-                #     self._update_seen_metrics(stats['SeenList'])
+                if stats['APRSDThreadList']:
+                    self._update_thread_metrics(stats['APRSDThreadList'])
+                if stats['PluginManager']:
+                   self._update_plugins_metrics(stats['PluginManager'])
+                if stats['SeenList']:
+                    self._update_seen_metrics(stats['SeenList'])
 
     def _update_aprsd_metrics(self, aprsd_stats):
         logger.info("_update_aprsd_metrics")
@@ -229,13 +229,13 @@ class APRSDExporter:
                     continue
             logger.info(f"thread_list[thread]: {thread_list[thread]}")
             self._metrics[THREAD_METRICS][thread].set(
-                {'status': 'name'}, thread_list[thread]['class']
+                {'class': thread_list[thread]['class']}, 1.0
             )
             self._metrics[THREAD_METRICS][thread].set(
-                {'status': 'alive'}, thread_list[thread]['alive']
+                {'alive': thread_list[thread]['alive']}, 1.0
             )
             self._metrics[THREAD_METRICS][thread].set(
-                {'status': 'age'}, thread_list[thread]['age']
+                {'age': thread_list[thread]['age']}, 1.0
             )
             self._metrics[THREAD_METRICS][thread].set(
                 {'status': 'loop_count'}, thread_list[thread]['loop_count']
@@ -256,8 +256,9 @@ class APRSDExporter:
                 seen_list[callsign]['count']
             )
             self._metrics[SEEN_METRICS]['callsigns'].set(
-                {'callsign': callsign, 'status': 'last_seen'},
-                seen_list[callsign]['last']
+                {'callsign': callsign,
+                 'last_seen': seen_list[callsign]['last']},
+                1.0
             )
 
     def _update_plugins_metrics(self, plugins_list):
@@ -281,12 +282,12 @@ class APRSDExporter:
                 {'packets': 'rx'}, plugins_list[plugin]['rx']
             )
             self._metrics[PLUGINS_METRICS][plugin_name].set(
-                {'status': 'enabled'}, plugins_list[plugin]['enabled']
+                {'enabled': plugins_list[plugin]['enabled']}, 1.0
             )
             self._metrics[PLUGINS_METRICS][plugin_name].set(
-                {'status': 'version'}, plugins_list[plugin]['version']
+                {'version': plugins_list[plugin]['version']}, 1.0
             )
             self._metrics[PLUGINS_METRICS][plugin_name].set(
-                {'status': 'name'}, plugin
+                {'name': plugin}, 1.0
             )
 
