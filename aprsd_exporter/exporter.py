@@ -196,21 +196,21 @@ class APRSDExporter:
     def _update_packet_metrics(self, packet_list):
         logger.info(f"_update_packet_metrics")
         self._metrics[PACKET_METRICS]['Packets'].set(
-            {'type': 'total'}, packet_list['total_tracked']
+            {'count': 'total'}, packet_list['total_tracked']
         )
         self._metrics[PACKET_METRICS]['Packets'].set(
-            {'type': 'tx'}, packet_list['tx']
+            {'count': 'tx'}, packet_list['tx']
         )
         self._metrics[PACKET_METRICS]['Packets'].set(
-            {'type': 'rx'}, packet_list['rx']
+            {'count': 'rx'}, packet_list['rx']
         )
         for packet_type in packet_list['types']:
             logger.debug(f"packet_type: {packet_type}")
             self._metrics[PACKET_METRICS][packet_type].set(
-                {'type': 'tx'}, packet_list['types'][packet_type]['tx']
+                {'count': 'tx'}, packet_list['types'][packet_type]['tx']
             )
             self._metrics[PACKET_METRICS][packet_type].set(
-                {'type': 'rx'}, packet_list['types'][packet_type]['rx']
+                {'count': 'rx'}, packet_list['types'][packet_type]['rx']
             )
 
     def _update_thread_metrics(self, thread_list):
