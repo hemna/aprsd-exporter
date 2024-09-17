@@ -186,10 +186,10 @@ class APRSDExporter:
         self._metrics[APRSD_STATS]['aprsd'].set(
             {'callsign': aprsd_stats['callsign']}, 1.0
         )
-        self._metrics[APRSD_STATS]['memory'].set(
+        self._metrics[APRSD_STATS]['aprsd_memory'].set(
             {'type': 'current'}, aprsd_stats['memory_current']
         )
-        self._metrics[APRSD_STATS]['memory'].set(
+        self._metrics[APRSD_STATS]['aprsd_memory'].set(
             {'type': 'peak'}, aprsd_stats['memory_peak']
         )
 
