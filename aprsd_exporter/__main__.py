@@ -3,11 +3,32 @@ Export TNC metrics using prometheus.
 """
 
 import asyncio
+import inspect
+import logging
 from loguru import logger
 
 import click
 
 from .exporter import APRSDExporter
+
+
+class InterceptHandler(logging.Handler):
+    def emit(self, record: logging.LogRecord) -> None:
+        # Get corresponding Loguru level if it exists.
+        level: str | int
+        try:
+            level = logger.level(record.levelname).name
+        except ValueError:
+            level = record.levelno
+
+        # Find caller from where originated the logged message.
+        frame, depth = inspect.currentframe(), 0
+        while frame and (depth == 0 or frame.f_code.co_filename == logging.__file__):
+            frame = frame.f_back
+            depth += 1
+
+        logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
+
 
 @click.command()
 @click.option(
@@ -52,6 +73,9 @@ from .exporter import APRSDExporter
 )
 def main(aprsd_url, host, port, update_interval, debug, quiet):
     """Run prometheus exporter"""
+    logging.getLogger("asyncio").setLevel(logging.ERROR)
+    logging.getLogger("aiohttp").setLevel(logging.DEBUG)
+    logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
     # set up command-line argument parser
     # set logging message verbosity
     # if debug:
