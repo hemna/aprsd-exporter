@@ -181,7 +181,7 @@ class APRSDExporter:
             {'version': aprsd_stats['version']}, 1.0
         )
         self._metrics[APRSD_STATS]['aprsd'].set(
-            {'uptime': aprsd_stats['uptime']}, aprsd_stats['uptime']
+            {'uptime': aprsd_stats['uptime']}, 1.0
         )
         self._metrics[APRSD_STATS]['aprsd'].set(
             {'callsign': aprsd_stats['callsign']}, 1.0
