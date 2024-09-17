@@ -167,12 +167,12 @@ class APRSDExporter:
             if self._metrics:
                 self._update_aprsd_metrics(stats["APRSDStats"])
                 self._update_packet_metrics(stats['PacketList'])
-                if stats['APRSDThreadList']:
-                    self._update_thread_metrics(stats['APRSDThreadList'])
-                if stats['PluginManager']:
-                    self._update_plugins_metrics(stats['PluginManager'])
-                if stats['SeenList']:
-                    self._update_seen_metrics(stats['SeenList'])
+                # if stats['APRSDThreadList']:
+                #     self._update_thread_metrics(stats['APRSDThreadList'])
+                # if stats['PluginManager']:
+                #     self._update_plugins_metrics(stats['PluginManager'])
+                # if stats['SeenList']:
+                #     self._update_seen_metrics(stats['SeenList'])
 
     def _update_aprsd_metrics(self, aprsd_stats):
         logger.info("_update_aprsd_metrics")
@@ -227,7 +227,7 @@ class APRSDExporter:
                 except Exception:
                     logger.error(f"Failed to create metric for thread: {thread}")
                     continue
-            # logger.info(f"thread_list[thread]: {thread_list[thread]}")
+            logger.info(f"thread_list[thread]: {thread_list[thread]}")
             self._metrics[THREAD_METRICS][thread].set(
                 {'status': 'name'}, thread_list[thread]['class']
             )
