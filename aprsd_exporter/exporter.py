@@ -165,7 +165,7 @@ class APRSDExporter:
             self.callsign = stats['APRSDStats']['callsign']
             self.register_metrics()
             if self._metrics:
-                self._update_aprsd_metrics(stats["APRSDStats"])
+                #self._update_aprsd_metrics(stats["APRSDStats"])
                 self._update_packet_metrics(stats['PacketList'])
                 # if stats['APRSDThreadList']:
                 #     self._update_thread_metrics(stats['APRSDThreadList'])
