@@ -6,7 +6,6 @@ from loguru import logger
 import requests
 import socket
 
-from .metrics import ALL_METRICS
 
 APRSD_STATS = 'aprsd'
 PACKET_METRICS = 'packets'
