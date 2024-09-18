@@ -180,9 +180,9 @@ class APRSDExporter:
         self._metrics[APRSD_STATS]['aprsd'].set(
             {'version': aprsd_stats['version']}, 1.0
         )
-        self._metrics[APRSD_STATS]['aprsd'].set(
-            {'uptime': aprsd_stats['uptime']}, 1.0
-        )
+        # self._metrics[APRSD_STATS]['aprsd'].set(
+        #     {'uptime': aprsd_stats['uptime']}, 1.0
+        # )
         self._metrics[APRSD_STATS]['aprsd'].set(
             {'callsign': aprsd_stats['callsign']}, 1.0
         )
@@ -234,9 +234,9 @@ class APRSDExporter:
             self._metrics[THREAD_METRICS][thread].set(
                 {'alive': thread_list[thread]['alive']}, 1.0
             )
-            self._metrics[THREAD_METRICS][thread].set(
-                {'age': thread_list[thread]['age']}, 1.0
-            )
+            # self._metrics[THREAD_METRICS][thread].set(
+            #     {'age': thread_list[thread]['age']}, 1.0
+            # )
             self._metrics[THREAD_METRICS][thread].set(
                 {'status': 'loop_count'}, thread_list[thread]['loop_count']
             )
