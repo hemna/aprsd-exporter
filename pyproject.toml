@@ -150,7 +150,9 @@ build-backend = "setuptools.build_meta"
 
 [dependency-groups]
 dev = [
+    "flake8>=7.3.0",
     "pip-tools>=7.5.2",
+    "pytest>=9.0.2",
     "tox>=4.32.0",
 ]
 

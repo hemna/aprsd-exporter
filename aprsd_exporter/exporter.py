@@ -1,7 +1,7 @@
 import asyncio
 from asyncio.events import AbstractEventLoop
 from aioprometheus.service import Service
-from aioprometheus import Counter, Gauge, Histogram, Summary
+from aioprometheus import Gauge
 from loguru import logger
 import requests
 import socket
@@ -12,7 +12,6 @@ PACKET_METRICS = 'packets'
 THREAD_METRICS = 'threads'
 SEEN_METRICS = 'seen'
 PLUGINS_METRICS = 'plugins'
-
 
 
 class APRSDExporter:
@@ -139,7 +138,7 @@ class APRSDExporter:
             }
 
     def metric_updater(self):
-        logger.info(f"metric_updater")
+        logger.info("metric_updater")
         self.update_metrics()
 
         # re-schedule another metrics update
@@ -147,7 +146,7 @@ class APRSDExporter:
             self.stats_interval, self.metric_updater)
 
     def collect_metrics(self):
-        logger.info(f"collect_metrics")
+        logger.info("collect_metrics")
         r = requests.get(f"{self.aprsd_url}/stats")
         if r.status_code != 200:
             logger.error(f"Failed to get stats from APRSD: {r.status_code}")
@@ -170,7 +169,7 @@ class APRSDExporter:
                 if stats['APRSDThreadList']:
                     self._update_thread_metrics(stats['APRSDThreadList'])
                 if stats['PluginManager']:
-                   self._update_plugins_metrics(stats['PluginManager'])
+                    self._update_plugins_metrics(stats['PluginManager'])
                 if stats['SeenList']:
                     self._update_seen_metrics(stats['SeenList'])
 
@@ -194,7 +193,7 @@ class APRSDExporter:
         )
 
     def _update_packet_metrics(self, packet_list):
-        logger.info(f"_update_packet_metrics")
+        logger.info("_update_packet_metrics")
         self._metrics[PACKET_METRICS]['Packets'].set(
             {'count': 'total'}, packet_list['total_tracked']
         )
@@ -247,7 +246,7 @@ class APRSDExporter:
         if 'callsigns' not in self._metrics[SEEN_METRICS]:
             self._metrics[SEEN_METRICS]['callsigns'] = Gauge(
                 'callsigns',
-                f"The stats of callsigns seen by APRSD",
+                "The stats of callsigns seen by APRSD",
                 const_labels=self.const_labels
             )
         for callsign in seen_list:
@@ -290,4 +289,3 @@ class APRSDExporter:
             self._metrics[PLUGINS_METRICS][plugin_name].set(
                 {'name': plugin}, 1.0
             )
-
