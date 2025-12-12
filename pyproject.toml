@@ -125,6 +125,7 @@ dev = [ ]
 "Homepage" = "https://github.com/hemna/aprsd-exporter"
 "Bug Reports" = "https://github.com/hemna/aprsd-exporter/issues"
 "Source" = "https://github.com/hemna/aprsd-exporter"
+Documentation = "https://aprsd-exporter.readthedocs.io/en/latest/"
 
 # The following would provide a command line executable called `sample`
 # which executes the function `main` from this package when invoked.
