@@ -1,11 +1,11 @@
 """
-Tests for `aprsd-exporter` module.
+Tests for `aprsd_exporter` module.
 """
 import pytest
-from aprsd-exporter import aprsd-exporter
+from aprsd_exporter import exporter
 
 
-class TestAprsd-exporter(object):
+class TestAprsdExporter(object):
 
     @classmethod
     def setup_class(cls):
