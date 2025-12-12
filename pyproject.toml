@@ -169,4 +169,22 @@ skip_gitignore = true
 [tool.coverage.run]
 branch = true
 
+[tool.tox]
+toxfile = "tox.ini"
+
+[tool.tox.env.pkg]
+deps = [
+    "setuptools>=69.5.0",
+    "setuptools_scm>=0",
+    "wheel",
+]
+build-backend = "setuptools.build_meta"
+allowlist_externals = ["flake8", "pytest"]
+
+[tool.tox.env.lint]
+deps = [
+    "flake8>=7.3.0",
+]
+allowlist_externals = ["flake8"]
+
 [tool.setuptools_scm]
