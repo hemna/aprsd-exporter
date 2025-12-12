@@ -6,8 +6,8 @@ ENV PYTHONUNBUFFERED=1
 
 # Create a non-root user and install dependencies
 RUN set -ex \
-    && addgroup --system --gid 1001 appgroup \
-    && adduser --uid 1001 --gid 1001 -s /bin/sh -D -h /app appuser \
+    && addgroup -S -g 1001 appgroup \
+    && adduser -S -u 1001 -G appgroup -s /bin/sh -D -h /app appuser \
     && apk update \
     && apk upgrade \
     && apk add --no-cache git curl gcc musl-dev libffi-dev \
@@ -18,6 +18,7 @@ RUN set -ex \
 FROM build AS final
 WORKDIR /app
 
+RUN uv venv
 RUN uv pip install git+https://github.com/hemna/aprsd-exporter.git
 
 ADD run.sh /app/run.sh
