@@ -12,6 +12,7 @@ Contents:
    readme
    installation
    usage
+   grafana
    apidoc/modules
    contributing
    authors
