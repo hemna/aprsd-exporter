@@ -131,7 +131,24 @@ The exporter provides the following Prometheus metrics:
 
 All metrics include labels for `host`, `app`, and `callsign`.
 
-For detailed information on creating Grafana dashboards and PromQL queries, see the [Grafana Dashboard Guide](docs/source/grafana.md).
+## Grafana Dashboard
+
+A pre-built Grafana dashboard is available for quick setup:
+
+1. Import the dashboard JSON file (`grafana-dashboard.json`) into Grafana
+2. Select your Prometheus data source
+3. The dashboard will automatically populate with APRSD metrics
+
+The dashboard includes panels for:
+- Packet rates (RX/TX)
+- Memory usage
+- Packet type distribution
+- Top active callsigns
+- Thread status and performance
+- Plugin metrics
+- Key statistics
+
+For detailed information on creating custom Grafana dashboards and PromQL queries, see the [Grafana Dashboard Guide](docs/source/grafana.md).
 
 ## Project Links
 
