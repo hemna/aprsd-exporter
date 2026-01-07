@@ -71,7 +71,20 @@ class InterceptHandler(logging.Handler):
     default=False,
     help="Only print error messages to stdout"
 )
-def main(aprsd_url, host, port, update_interval, debug, quiet):
+@click.option(
+    "--api",
+    is_flag=True,
+    default=False,
+    help="Run Flask API server to accept stats from external APRSD instance"
+)
+@click.option(
+    "--api-port",
+    metavar="<api port>",
+    type=int,
+    default=8081,
+    help="The port for the Flask API server. Default is 8081"
+)
+def main(aprsd_url, host, port, update_interval, debug, quiet, api, api_port):
     """Run prometheus exporter"""
     logging.getLogger("asyncio").setLevel(logging.ERROR)
     logging.getLogger("aiohttp").setLevel(logging.DEBUG)
@@ -91,12 +104,15 @@ def main(aprsd_url, host, port, update_interval, debug, quiet):
     #                         format='%(levelname)s: %(asctime)s - %(message)s',
     #                         datefmt='%d-%b-%y %H:%M:%S')
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     exp = APRSDExporter(
         aprsd_url=aprsd_url,
         host=host,
         port=port,
         stats_interval=update_interval,
+        api=api,
+        api_port=api_port,
     )
     try:
         # start metrics server and listener

@@ -5,6 +5,8 @@ from aioprometheus import Gauge
 from loguru import logger
 import requests
 import socket
+from flask import Flask, request, jsonify
+import threading
 
 
 APRSD_STATS = 'aprsd'
@@ -16,14 +18,20 @@ PLUGINS_METRICS = 'plugins'
 
 class APRSDExporter:
     def __init__(self, aprsd_url: str, host: str, port: int,
-                 stats_interval: int, loop: AbstractEventLoop = None):
+                 stats_interval: int, api: bool = False, api_port: int = 8081,
+                 loop: AbstractEventLoop = None):
         self.loop = loop or asyncio.get_event_loop()
         self.aprsd_url = aprsd_url
         self.host = host
         self.port = port
         self.stats_interval = stats_interval
+        self.api = api
+        self.api_port = api_port
         self.metrics_task = None
         self.server = Service()
+        self.flask_app = None
+        self.flask_thread = None
+        self.received_stats = None
 
         self.callsign = None
         self._metrics = None
@@ -33,6 +41,9 @@ class APRSDExporter:
         await self.server.start(addr=self.host, port=self.port)
         logger.info(f"Serving APRSD prometheus metrics on: {self.server.metrics_url}")
 
+        if self.api:
+            self._start_flask_api()
+
         # Schedule a timer to update metrics. In a realistic application
         # the metrics would be updated as needed. In this example, a simple
         # timer is used to emulate things happening, which conveniently
@@ -41,7 +52,36 @@ class APRSDExporter:
             self.stats_interval, self.metric_updater)
 
     async def stop(self):
+        if self.flask_thread and self.flask_thread.is_alive():
+            # Flask doesn't have a clean shutdown, but since it's in a daemon thread, it will stop with the process
+            pass
         await self.server.stop()
+
+    def _start_flask_api(self):
+        self.flask_app = Flask(__name__)
+
+        @self.flask_app.route('/stats', methods=['POST'])
+        def receive_stats():
+            try:
+                self.received_stats = request.get_json()
+                logger.info("Received stats from external APRSD instance")
+                return jsonify({"status": "ok"}), 200
+            except Exception as e:
+                logger.error(f"Failed to process stats: {e}")
+                return jsonify({"error": str(e)}), 400
+
+        @self.flask_app.route('/health', methods=['GET'])
+        def health():
+            return jsonify({"status": "healthy"}), 200
+
+        logger.info(f"Starting Flask API server on port {self.api_port}")
+        self.flask_thread = threading.Thread(target=self._run_flask, daemon=True)
+        self.flask_thread.start()
+        logger.info(f"Started Flask API server thread on port {self.api_port}")
+
+    def _run_flask(self):
+        logger.info(f"Flask app.run() called for port {self.api_port}")
+        self.flask_app.run(host='0.0.0.0', port=self.api_port, debug=False, use_reloader=False, threaded=True)
 
     def register_metrics(self):
         if not self._metrics:
@@ -49,7 +89,7 @@ class APRSDExporter:
             self.const_labels = {
                 "host": socket.gethostname(),
                 "app": f"{self.__class__.__name__}",
-                "callsign": self.callsign,
+                "callsign": self.callsign or "unknown",
             }
             const_labels = self.const_labels
             self._metrics = {
@@ -57,79 +97,94 @@ class APRSDExporter:
                     'aprsd': Gauge(
                         'aprsd',
                         'APRSD Stats',
-                        const_labels=const_labels
+                        const_labels=const_labels,
+                        registry=self.server.registry
                     ),
                     'aprsd_memory': Gauge(
                         'aprsd_memory',
                         'APRSD Memory Usage',
-                        const_labels=const_labels
+                        const_labels=const_labels,
+                        registry=self.server.registry
                     ),
                 },
                 PACKET_METRICS: {
                     'Packets': Gauge(
                         'Packets',
                         'Total number of packets sent/received',
-                        const_labels=const_labels
+                        const_labels=const_labels,
+                        registry=self.server.registry
                     ),
                     'AckPacket': Gauge(
                         'AckPacket',
                         'Ack Packet Totals',
-                        const_labels=const_labels
+                        const_labels=const_labels,
+                        registry=self.server.registry
                     ),
                     'BeaconPacket': Gauge(
                         'BeaconPacket',
                         'Beacon type packets',
-                        const_labels=const_labels
+                        const_labels=const_labels,
+                        registry=self.server.registry
                     ),
                     'BulletinPacket': Gauge(
                         'BulletinPacket',
                         'Bulletin type packets',
-                        const_labels=const_labels
+                        const_labels=const_labels,
+                        registry=self.server.registry
                     ),
                     'MessagePacket': Gauge(
                         'MessagePacket',
                         'Message type packets',
-                        const_labels=const_labels
+                        const_labels=const_labels,
+                        registry=self.server.registry
                     ),
                     'MicEPacket': Gauge(
                         'MicEPacket',
                         'Mic E Packets',
-                        const_labels=const_labels
+                        const_labels=const_labels,
+                        registry=self.server.registry
                     ),
                     'ObjectPacket': Gauge(
                         'ObjectPacket',
                         'Object Packets',
-                        const_labels=const_labels
+                        const_labels=const_labels,
+                        registry=self.server.registry
                     ),
                     'RejectPacket': Gauge(
                         'RejectPacket',
                         'Reject Packets',
-                        const_labels=const_labels
+                        const_labels=const_labels,
+                        registry=self.server.registry
                     ),
                     'StatusPacket': Gauge(
                         'StatusPacket',
                         'Status Packets',
-                        const_labels=const_labels
+                        const_labels=const_labels,
+                        registry=self.server.registry
                     ),
                     'TelemetryPacket': Gauge(
                         'TelemetryPacket',
                         'Telemetry Packets',
-                        const_labels=const_labels
+                        const_labels=const_labels,
+                        registry=self.server.registry
                     ),
                     'ThirdPartyPacket': Gauge(
                         'ThirdPartyPacket',
                         'Third Party Packets',
-                        const_labels=const_labels
+                        const_labels=const_labels,
+                        registry=self.server.registry
                     ),
                     'WeatherPacket': Gauge(
                         'WeatherPacket',
                         'Weather Packets',
-                        const_labels=const_labels
+                        const_labels=const_labels,
+                        registry=self.server.registry
                     ),
                     'UnknownPacket': Gauge(
                         'UnknownPacket',
                         'Total number of unknown packets received',
-                        const_labels=const_labels
+                        const_labels=const_labels,
+                        registry=self.server.registry
                     ),
                 },
                 THREAD_METRICS: {},
@@ -147,12 +202,24 @@ class APRSDExporter:
 
     def collect_metrics(self):
         logger.info("collect_metrics")
-        r = requests.get(f"{self.aprsd_url}/stats")
-        if r.status_code != 200:
-            logger.error(f"Failed to get stats from APRSD: {r.status_code}")
-            return
-        stats_obj = r.json()
-        return stats_obj
+        if self.api and self.received_stats:
+            logger.info("Using received stats from API")
+            return self.received_stats
+        elif self.api:
+            logger.info("No stats received yet from API")
+            return None
+        else:
+            logger.info("Fetching stats from APRSD URL")
+            try:
+                r = requests.get(f"{self.aprsd_url}/stats")
+                if r.status_code != 200:
+                    logger.error(f"Failed to get stats from APRSD: {r.status_code}")
+                    return
+                stats_obj = r.json()
+                return stats_obj
+            except Exception as e:
+                logger.error(f"Error fetching stats from APRSD: {e}")
+                return None
 
     def update_metrics(self):
         # Update metrics here
@@ -221,7 +288,8 @@ class APRSDExporter:
                     self._metrics[THREAD_METRICS][thread] = Gauge(
                         thread,
                         f"Thread {thread} status",
-                        const_labels=self.const_labels
+                        const_labels=self.const_labels,
+                        registry=self.server.registry
                     )
                 except Exception:
                     logger.error(f"Failed to create metric for thread: {thread}")
@@ -247,7 +315,8 @@ class APRSDExporter:
             self._metrics[SEEN_METRICS]['callsigns'] = Gauge(
                 'callsigns',
                 "The stats of callsigns seen by APRSD",
-                const_labels=self.const_labels
+                const_labels=self.const_labels,
+                registry=self.server.registry
             )
         for callsign in seen_list:
             self._metrics[SEEN_METRICS]['callsigns'].set(
@@ -269,7 +338,8 @@ class APRSDExporter:
                     self._metrics[PLUGINS_METRICS][plugin_name] = Gauge(
                         plugin_name,
                         f"Plugin {plugin_name} status",
-                        const_labels=self.const_labels
+                        const_labels=self.const_labels,
+                        registry=self.server.registry
                     )
                 except Exception:
                     logger.error(f"Failed to create metric for plugin: {plugin}")
