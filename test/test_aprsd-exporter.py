@@ -1,10 +1,7 @@
-"""
-Tests for `aprsd_exporter` module.
-"""
+"""Tests for `aprsd_exporter` module."""
 
 
-class TestAprsdExporter(object):
-
+class TestAprsdExporter:
     @classmethod
     def setup_class(cls):
         pass

@@ -12,11 +12,11 @@ from pathlib import Path
 
 def main() -> None:
     docs_dir = Path(__file__).resolve().parent
-    for folder in ('build', 'source/apidoc'):
+    for folder in ("build", "source/apidoc"):
         delete_dir = docs_dir / folder
         if delete_dir.exists():
             shutil.rmtree(delete_dir)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

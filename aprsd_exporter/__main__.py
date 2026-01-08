@@ -1,6 +1,4 @@
-"""
-Export TNC metrics using prometheus.
-"""
+"""Export TNC metrics using prometheus."""
 
 import asyncio
 import inspect
@@ -27,7 +25,9 @@ class InterceptHandler(logging.Handler):
             frame = frame.f_back
             depth += 1
 
-        logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
+        logger.opt(depth=depth, exception=record.exc_info).log(
+            level, record.getMessage()
+        )
 
 
 @click.command()
@@ -36,14 +36,14 @@ class InterceptHandler(logging.Handler):
     metavar="<aprsd url>",
     type=str,
     default="http://localhost:8080",
-    help="The APRSD ADMIN URL to connect to. Default is http://localhost:8080"
+    help="The APRSD ADMIN URL to connect to. Default is http://localhost:8080",
 )
 @click.option(
     "--host",
     metavar="<exporter host>",
     type=str,
     default="0.0.0.0",
-    help="The IP address to expose collected metrics from. Default is"
+    help="The IP address to expose collected metrics from. Default is",
 )
 @click.option(
     "--port",
@@ -63,35 +63,37 @@ class InterceptHandler(logging.Handler):
     "--debug",
     is_flag=True,
     default=False,
-    help="Print debug messages to stdout"
+    help="Print debug messages to stdout",
 )
 @click.option(
     "--quiet",
     is_flag=True,
     default=False,
-    help="Only print error messages to stdout"
+    help="Only print error messages to stdout",
 )
 @click.option(
     "--api",
     is_flag=True,
     default=False,
-    help="Run Flask API server to accept stats from external APRSD instance"
+    help="Run Flask API server to accept stats from external APRSD instance",
 )
 @click.option(
     "--api-port",
     metavar="<api port>",
     type=int,
     default=8081,
-    help="The port for the Flask API server. Default is 8081"
+    help="The port for the Flask API server. Default is 8081",
 )
 @click.option(
     "--stats-file",
     metavar="<stats file>",
     type=str,
     default=None,
-    help="Path to the statsstore.p file to load stats from instead of fetching from APRSD"
+    help="Path to the statsstore.p file to load stats from instead of fetching from APRSD",
 )
-def main(aprsd_url, host, port, update_interval, debug, quiet, api, api_port, stats_file):
+def main(
+    aprsd_url, host, port, update_interval, debug, quiet, api, api_port, stats_file
+):
     """Run prometheus exporter"""
     logging.getLogger("asyncio").setLevel(logging.ERROR)
     logging.getLogger("aiohttp").setLevel(logging.DEBUG)
