@@ -101,7 +101,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "rate(Packets{count=\"rx\"}[5m])",
+          "expr": "rate(Packets{count=\"rx\",aprsd=~\"$aprsd\"}[5m])",
           "legendFormat": "RX Rate",
           "refId": "A"
         },
@@ -110,7 +110,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "rate(Packets{count=\"tx\"}[5m])",
+          "expr": "rate(Packets{count=\"tx\",aprsd=~\"$aprsd\"}[5m])",
           "legendFormat": "TX Rate",
           "refId": "B"
         }
@@ -168,7 +168,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "aprsd_memory{type=\"current\"}",
+          "expr": "aprsd_memory{type=\"current\",aprsd=~\"$aprsd\"}",
           "legendFormat": "Current Memory",
           "refId": "A"
         },
@@ -177,7 +177,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "aprsd_memory{type=\"peak\"}",
+          "expr": "aprsd_memory{type=\"peak\",aprsd=~\"$aprsd\"}",
           "legendFormat": "Peak Memory",
           "refId": "B"
         }
@@ -232,7 +232,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum by (__name__) ({__name__=~\".*Packet\", count=\"rx\"})",
+          "expr": "sum by (__name__) ({__name__=~\".*Packet\", count=\"rx\", aprsd=~\"$aprsd\"})",
           "legendFormat": "{{__name__}}",
           "refId": "A"
         }
@@ -319,7 +319,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "topk(10, callsigns{status=\"count\"})",
+          "expr": "topk(10, callsigns{status=\"count\",aprsd=~\"$aprsd\"})",
           "legendFormat": "{{callsign}}",
           "refId": "A"
         }
@@ -397,7 +397,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "{__name__!~\".*\", alive=\"True\"}",
+          "expr": "{__name__!=~\".*\", alive=\"True\", aprsd=~\"$aprsd\"}",
           "format": "table",
           "instant": true,
           "legendFormat": "{{__name__}}",
@@ -486,7 +486,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "rate({__name__!~\".*\", status=\"loop_count\"}[5m])",
+          "expr": "rate({__name__!=~\".*\", status=\"loop_count\", aprsd=~\"$aprsd\"}[5m])",
           "legendFormat": "{{__name__}}",
           "refId": "A"
         }
@@ -544,7 +544,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "Packets{count=\"total\"}",
+          "expr": "Packets{count=\"total\",aprsd=~\"$aprsd\"}",
           "legendFormat": "Total Packets",
           "refId": "A"
         }
@@ -602,7 +602,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "count(callsigns{status=\"count\"})",
+          "expr": "count(callsigns{status=\"count\",aprsd=~\"$aprsd\"})",
           "legendFormat": "Unique Callsigns",
           "refId": "A"
         }
@@ -660,7 +660,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "MessagePacket{count=\"rx\"}",
+          "expr": "MessagePacket{count=\"rx\",aprsd=~\"$aprsd\"}",
           "legendFormat": "Messages RX",
           "refId": "A"
         }
@@ -718,7 +718,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "UnknownPacket{count=\"rx\"}",
+          "expr": "UnknownPacket{count=\"rx\",aprsd=~\"$aprsd\"}",
           "legendFormat": "Unknown Packets",
           "refId": "A"
         }
@@ -805,7 +805,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "rate({__name__!~\".*\", packets=\"rx\"}[5m])",
+          "expr": "rate({__name__!=~\".*\", packets=\"rx\", aprsd=~\"$aprsd\"}[5m])",
           "legendFormat": "{{__name__}} RX",
           "refId": "A"
         },
@@ -814,7 +814,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "rate({__name__!~\".*\", packets=\"tx\"}[5m])",
+          "expr": "rate({__name__!=~\".*\", packets=\"tx\", aprsd=~\"$aprsd\"}[5m])",
           "legendFormat": "{{__name__}} TX",
           "refId": "B"
         }
@@ -876,7 +876,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "{__name__!~\".*\", class!=\"\"}",
+          "expr": "{__name__!=~\".*\", class!=\"\", aprsd=~\"$aprsd\"}",
           "format": "table",
           "instant": true,
           "legendFormat": "",
@@ -928,6 +928,19 @@
         "refresh": 1,
         "regex": "",
         "type": "datasource"
+      },
+      {
+        "allValue": ".*",
+        "includeAll": true,
+        "current": {},
+        "hide": 0,
+        "label": "APRSD Callsign",
+        "name": "aprsd",
+        "options": [],
+        "query": "label_values(Packets, aprsd)",
+        "refresh": 2,
+        "regex": "",
+        "type": "query"
       }
     ]
   },

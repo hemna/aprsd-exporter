@@ -217,6 +217,10 @@ class APRSDExporter:
                 ss.load()
                 # Restore
                 cfg.CONF.save_location = original_save_location
+                # Verify we have valid stats data
+                if not ss.data or 'APRSDStats' not in ss.data:
+                    logger.warning(f"Stats file loaded but contains no valid data")
+                    return None
                 # Wrap in the same format as HTTP response
                 stats_obj = {'stats': ss.data}
                 return stats_obj
@@ -245,63 +249,81 @@ class APRSDExporter:
     def update_metrics(self):
         # Update metrics here
         stats_obj = self.collect_metrics()
-        if stats_obj:
-            # Now process the stats and create/update the metrics.
-
-            stats = stats_obj['stats']
-            self.callsign = stats['APRSDStats']['callsign']
-            self.register_metrics()
-            if self._metrics:
-                self._update_aprsd_metrics(stats["APRSDStats"])
-                self._update_packet_metrics(stats['PacketList'])
-                if stats['APRSDThreadList']:
-                    self._update_thread_metrics(stats['APRSDThreadList'])
-                if stats['PluginManager']:
-                    self._update_plugins_metrics(stats['PluginManager'])
-                if stats['SeenList']:
-                    self._update_seen_metrics(stats['SeenList'])
+        if not stats_obj:
+            logger.warning("No valid stats object received")
+            return
+        
+        # Now process the stats and create/update the metrics.
+        stats = stats_obj.get('stats', {})
+        if not stats or 'APRSDStats' not in stats:
+            logger.error("Invalid stats object received, missing 'APRSDStats'")
+            return
+        
+        self.callsign = stats['APRSDStats'].get('callsign', 'UNKNOWN')
+        self.register_metrics()
+        if self._metrics:
+            self._update_aprsd_metrics(stats["APRSDStats"])
+            self._update_packet_metrics(stats.get('PacketList', {}))
+            if stats.get('APRSDThreadList'):
+                self._update_thread_metrics(stats['APRSDThreadList'])
+            if stats.get('PluginManager'):
+                self._update_plugins_metrics(stats['PluginManager'])
+            if stats.get('SeenList'):
+                self._update_seen_metrics(stats['SeenList'])
 
     def _update_aprsd_metrics(self, aprsd_stats):
         logger.info("_update_aprsd_metrics")
         logger.debug(f"aprsd_stats: {aprsd_stats}")
+        if not aprsd_stats:
+            logger.warning("aprsd_stats is empty")
+            return
+            
         self._metrics[APRSD_STATS]['aprsd'].set(
-            {'version': aprsd_stats['version']}, 1.0
+            {'version': aprsd_stats.get('version', 'UNKNOWN')}, 1.0
         )
         # self._metrics[APRSD_STATS]['aprsd'].set(
         #     {'uptime': aprsd_stats['uptime']}, 1.0
         # )
         self._metrics[APRSD_STATS]['aprsd'].set(
-            {'callsign': aprsd_stats['callsign']}, 1.0
+            {'callsign': aprsd_stats.get('callsign', 'UNKNOWN')}, 1.0
         )
         self._metrics[APRSD_STATS]['aprsd_memory'].set(
-            {'type': 'current'}, aprsd_stats['memory_current']
+            {'type': 'current'}, aprsd_stats.get('memory_current', 0)
         )
         self._metrics[APRSD_STATS]['aprsd_memory'].set(
-            {'type': 'peak'}, aprsd_stats['memory_peak']
+            {'type': 'peak'}, aprsd_stats.get('memory_peak', 0)
         )
 
     def _update_packet_metrics(self, packet_list):
         logger.info("_update_packet_metrics")
+        if not packet_list:
+            logger.warning("packet_list is empty")
+            return
+        
         self._metrics[PACKET_METRICS]['Packets'].set(
-            {'count': 'total'}, packet_list['total_tracked']
+            {'count': 'total'}, packet_list.get('total_tracked', 0)
         )
         self._metrics[PACKET_METRICS]['Packets'].set(
-            {'count': 'tx'}, packet_list['tx']
+            {'count': 'tx'}, packet_list.get('tx', 0)
         )
         self._metrics[PACKET_METRICS]['Packets'].set(
-            {'count': 'rx'}, packet_list['rx']
+            {'count': 'rx'}, packet_list.get('rx', 0)
         )
-        for packet_type in packet_list['types']:
+        for packet_type in packet_list.get('types', {}):
             logger.debug(f"packet_type: {packet_type}")
             self._metrics[PACKET_METRICS][packet_type].set(
-                {'count': 'tx'}, packet_list['types'][packet_type]['tx']
+                {'count': 'tx'}, packet_list['types'][packet_type].get('tx', 0)
             )
             self._metrics[PACKET_METRICS][packet_type].set(
-                {'count': 'rx'}, packet_list['types'][packet_type]['rx']
+                {'count': 'rx'}, packet_list['types'][packet_type].get('rx', 0)
             )
 
     def _update_thread_metrics(self, thread_list):
         logger.info("_update_thread_metrics")
+        if not thread_list:
+            logger.warning("thread_list is empty")
+            return
+            
         for thread in thread_list:
             # logger.info(f"thread: {thread}")
             if thread not in self._metrics[THREAD_METRICS]:
@@ -315,22 +337,31 @@ class APRSDExporter:
                 except Exception:
                     logger.error(f"Failed to create metric for thread: {thread}")
                     continue
-            logger.info(f"thread_list[thread]: {thread_list[thread]}")
+            
+            thread_data = thread_list.get(thread, {})
+            if not thread_data:
+                logger.warning(f"No data for thread: {thread}")
+                continue
+                
+            logger.info(f"thread_list[thread]: {thread_data}")
             self._metrics[THREAD_METRICS][thread].set(
-                {'class': thread_list[thread]['class']}, 1.0
+                {'class': thread_data.get('class', 'UNKNOWN')}, 1.0
             )
             self._metrics[THREAD_METRICS][thread].set(
-                {'alive': thread_list[thread]['alive']}, 1.0
+                {'alive': str(thread_data.get('alive', False))}, 1.0
             )
             # self._metrics[THREAD_METRICS][thread].set(
             #     {'age': thread_list[thread]['age']}, 1.0
             # )
             self._metrics[THREAD_METRICS][thread].set(
-                {'status': 'loop_count'}, thread_list[thread]['loop_count']
+                {'status': 'loop_count'}, thread_data.get('loop_count', 0)
             )
 
     def _update_seen_metrics(self, seen_list):
         logger.info("_update_seen_metrics")
+        if not seen_list:
+            logger.warning("seen_list is empty")
+            return
 
         if 'callsigns' not in self._metrics[SEEN_METRICS]:
             self._metrics[SEEN_METRICS]['callsigns'] = Gauge(
@@ -340,18 +371,27 @@ class APRSDExporter:
                 registry=self.server.registry
             )
         for callsign in seen_list:
+            callsign_data = seen_list.get(callsign, {})
+            if not callsign_data:
+                logger.warning(f"No data for callsign: {callsign}")
+                continue
+                
             self._metrics[SEEN_METRICS]['callsigns'].set(
                 {'callsign': callsign, 'status': 'count'},
-                seen_list[callsign]['count']
+                callsign_data.get('count', 0)
             )
             self._metrics[SEEN_METRICS]['callsigns'].set(
                 {'callsign': callsign,
-                 'last_seen': seen_list[callsign]['last']},
+                 'last_seen': str(callsign_data.get('last', ''))},
                 1.0
             )
 
     def _update_plugins_metrics(self, plugins_list):
         logger.info("_update_plugins_metrics")
+        if not plugins_list:
+            logger.warning("plugins_list is empty")
+            return
+            
         for plugin in plugins_list:
             plugin_name = plugin.split('.')[-1]
             if plugin_name not in self._metrics[PLUGINS_METRICS]:
@@ -365,11 +405,17 @@ class APRSDExporter:
                 except Exception:
                     logger.error(f"Failed to create metric for plugin: {plugin}")
                     continue
+            
+            plugin_data = plugins_list.get(plugin, {})
+            if not plugin_data:
+                logger.warning(f"No data for plugin: {plugin}")
+                continue
+                
             self._metrics[PLUGINS_METRICS][plugin_name].set(
-                {'packets': 'tx'}, plugins_list[plugin]['tx']
+                {'packets': 'tx'}, plugin_data.get('tx', 0)
             )
             self._metrics[PLUGINS_METRICS][plugin_name].set(
-                {'packets': 'rx'}, plugins_list[plugin]['rx']
+                {'packets': 'rx'}, plugin_data.get('rx', 0)
             )
             self._metrics[PLUGINS_METRICS][plugin_name].set(
                 {'enabled': plugins_list[plugin]['enabled']}, 1.0
