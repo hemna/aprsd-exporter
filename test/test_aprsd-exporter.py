@@ -1,8 +1,6 @@
 """
 Tests for `aprsd_exporter` module.
 """
-import pytest
-from aprsd_exporter import exporter
 
 
 class TestAprsdExporter(object):

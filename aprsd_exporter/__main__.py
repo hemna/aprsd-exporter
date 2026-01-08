@@ -5,9 +5,9 @@ Export TNC metrics using prometheus.
 import asyncio
 import inspect
 import logging
-from loguru import logger
 
 import click
+from loguru import logger
 
 from .exporter import APRSDExporter
 

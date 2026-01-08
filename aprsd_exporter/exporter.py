@@ -1,17 +1,16 @@
 import asyncio
-from asyncio.events import AbstractEventLoop
-from aioprometheus.service import Service
-from aioprometheus import Gauge
-from loguru import logger
-import requests
-import socket
-from flask import Flask, request, jsonify
-import threading
 import os
-from oslo_config import cfg
+import socket
+import threading
+from asyncio.events import AbstractEventLoop
 
+import requests
+from aioprometheus import Gauge
+from aioprometheus.service import Service
 from aprsd.threads.stats import StatsStore
-
+from flask import Flask, jsonify, request
+from loguru import logger
+from oslo_config import cfg
 
 APRSD_STATS = 'aprsd'
 PACKET_METRICS = 'packets'
@@ -219,7 +218,7 @@ class APRSDExporter:
                 cfg.CONF.save_location = original_save_location
                 # Verify we have valid stats data
                 if not ss.data or 'APRSDStats' not in ss.data:
-                    logger.warning(f"Stats file loaded but contains no valid data")
+                    logger.warning("Stats file loaded but contains no valid data")
                     return None
                 # Wrap in the same format as HTTP response
                 stats_obj = {'stats': ss.data}
@@ -252,13 +251,13 @@ class APRSDExporter:
         if not stats_obj:
             logger.warning("No valid stats object received")
             return
-        
+
         # Now process the stats and create/update the metrics.
         stats = stats_obj.get('stats', {})
         if not stats or 'APRSDStats' not in stats:
             logger.error("Invalid stats object received, missing 'APRSDStats'")
             return
-        
+
         self.callsign = stats['APRSDStats'].get('callsign', 'UNKNOWN')
         self.register_metrics()
         if self._metrics:
@@ -277,7 +276,7 @@ class APRSDExporter:
         if not aprsd_stats:
             logger.warning("aprsd_stats is empty")
             return
-            
+ 
         self._metrics[APRSD_STATS]['aprsd'].set(
             {'version': aprsd_stats.get('version', 'UNKNOWN')}, 1.0
         )
