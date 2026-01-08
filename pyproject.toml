@@ -24,6 +24,7 @@ dynamic = ["version"]
 
 dependencies = [
     "aioprometheus[aiohttp]",
+    "aprsd",
     "click",
     "flask",
     "loguru",

@@ -84,7 +84,14 @@ class InterceptHandler(logging.Handler):
     default=8081,
     help="The port for the Flask API server. Default is 8081"
 )
-def main(aprsd_url, host, port, update_interval, debug, quiet, api, api_port):
+@click.option(
+    "--stats-file",
+    metavar="<stats file>",
+    type=str,
+    default=None,
+    help="Path to the statsstore.p file to load stats from instead of fetching from APRSD"
+)
+def main(aprsd_url, host, port, update_interval, debug, quiet, api, api_port, stats_file):
     """Run prometheus exporter"""
     logging.getLogger("asyncio").setLevel(logging.ERROR)
     logging.getLogger("aiohttp").setLevel(logging.DEBUG)
@@ -113,6 +120,7 @@ def main(aprsd_url, host, port, update_interval, debug, quiet, api, api_port):
         stats_interval=update_interval,
         api=api,
         api_port=api_port,
+        stats_file=stats_file,
     )
     try:
         # start metrics server and listener

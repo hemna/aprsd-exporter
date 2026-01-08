@@ -7,6 +7,10 @@ import requests
 import socket
 from flask import Flask, request, jsonify
 import threading
+import os
+from oslo_config import cfg
+
+from aprsd.threads.stats import StatsStore
 
 
 APRSD_STATS = 'aprsd'
@@ -19,7 +23,7 @@ PLUGINS_METRICS = 'plugins'
 class APRSDExporter:
     def __init__(self, aprsd_url: str, host: str, port: int,
                  stats_interval: int, api: bool = False, api_port: int = 8081,
-                 loop: AbstractEventLoop = None):
+                 stats_file: str = None, loop: AbstractEventLoop = None):
         self.loop = loop or asyncio.get_event_loop()
         self.aprsd_url = aprsd_url
         self.host = host
@@ -27,6 +31,7 @@ class APRSDExporter:
         self.stats_interval = stats_interval
         self.api = api
         self.api_port = api_port
+        self.stats_file = stats_file
         self.metrics_task = None
         self.server = Service()
         self.flask_app = None
@@ -202,7 +207,23 @@ class APRSDExporter:
 
     def collect_metrics(self):
         logger.info("collect_metrics")
-        if self.api and self.received_stats:
+        if self.stats_file:
+            logger.info(f"Loading stats from file: {self.stats_file}")
+            try:
+                # Temporarily set save_location to the directory of the file
+                original_save_location = cfg.CONF.save_location
+                cfg.CONF.save_location = os.path.dirname(self.stats_file)
+                ss = StatsStore()
+                ss.load()
+                # Restore
+                cfg.CONF.save_location = original_save_location
+                # Wrap in the same format as HTTP response
+                stats_obj = {'stats': ss.data}
+                return stats_obj
+            except Exception as e:
+                logger.error(f"Error loading stats from file {self.stats_file}: {e}")
+                return None
+        elif self.api and self.received_stats:
             logger.info("Using received stats from API")
             return self.received_stats
         elif self.api:
