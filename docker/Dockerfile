@@ -25,4 +25,5 @@ ADD run.sh /app/run.sh
 
 EXPOSE 8080
 
-ENTRYPOINT ["/app/run.sh"]
+ENTRYPOINT ["/app/setup.sh"]
+CMD ["aprsd_exporter"]

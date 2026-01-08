@@ -10,4 +10,4 @@ UPDATE_INTERVAL=${UPDATE_INTERVAL:-60}
 
 source /app/.venv/bin/activate
 
-aprsd_exporter --aprsd-url ${APRSD_URL} --update-interval ${UPDATE_INTERVAL}
+aprsd_exporter --aprsd-url ${APRSD_URL} --update-interval ${UPDATE_INTERVAL} --api --api-port 8081
