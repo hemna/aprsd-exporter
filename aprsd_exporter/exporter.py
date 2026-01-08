@@ -276,7 +276,7 @@ class APRSDExporter:
         if not aprsd_stats:
             logger.warning("aprsd_stats is empty")
             return
- 
+
         self._metrics[APRSD_STATS]['aprsd'].set(
             {'version': aprsd_stats.get('version', 'UNKNOWN')}, 1.0
         )
