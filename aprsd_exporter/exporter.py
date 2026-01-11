@@ -288,6 +288,11 @@ class APRSDExporter:
             if stats.get("SeenList"):
                 self._update_seen_metrics(stats["SeenList"])
 
+        # Clear reference to stats_obj to help with garbage collection
+        # The stats dict may be large, especially if SeenList grows unbounded
+        del stats_obj
+        del stats
+
     def _update_aprsd_metrics(self, aprsd_stats):
         logger.info("_update_aprsd_metrics")
         logger.debug(f"aprsd_stats: {aprsd_stats}")
@@ -350,6 +355,13 @@ class APRSDExporter:
             logger.warning("thread_list is empty")
             return
 
+        # Clean up metrics for threads that no longer exist
+        current_threads = set(thread_list.keys())
+        existing_threads = set(self._metrics[THREAD_METRICS].keys())
+        for thread in existing_threads - current_threads:
+            logger.debug(f"Removing metric for thread that no longer exists: {thread}")
+            del self._metrics[THREAD_METRICS][thread]
+
         for thread in thread_list:
             # logger.info(f"thread: {thread}")
             if thread not in self._metrics[THREAD_METRICS]:
@@ -399,6 +411,10 @@ class APRSDExporter:
                 const_labels=self.const_labels,
                 registry=self.server.registry,
             )
+
+        # Process callsigns - note that Prometheus will store time series for each
+        # callsign, which can grow unbounded if the seen list grows. This is a
+        # limitation of high-cardinality metrics in Prometheus.
         for callsign in seen_list:
             callsign_data = seen_list.get(callsign, {})
             if not callsign_data:
