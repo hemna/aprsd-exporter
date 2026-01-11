@@ -1,5 +1,6 @@
 import asyncio
 import os
+import resource
 import socket
 import threading
 from asyncio.events import AbstractEventLoop
@@ -47,6 +48,7 @@ class APRSDExporter:
 
         self.callsign = None
         self._metrics = None
+        self.memory_logger_timer = None
 
     async def start(self):
         # start prometheus metrics server
@@ -65,7 +67,16 @@ class APRSDExporter:
             self.metric_updater,
         )
 
+        # Schedule memory usage logging every 60 seconds
+        self.memory_logger_timer = asyncio.get_event_loop().call_later(
+            60,
+            self.memory_logger,
+        )
+
     async def stop(self):
+        # Cancel memory logger timer
+        if self.memory_logger_timer:
+            self.memory_logger_timer.cancel()
         if self.flask_thread and self.flask_thread.is_alive():
             # Flask doesn't have a clean shutdown, but since it's in a daemon thread, it will stop with the process
             pass
@@ -220,6 +231,50 @@ class APRSDExporter:
         self.timer = asyncio.get_event_loop().call_later(
             self.stats_interval,
             self.metric_updater,
+        )
+
+    def _get_memory_usage(self):
+        """Get current memory usage in bytes. Returns RSS (Resident Set Size)."""
+        try:
+            # Try to use psutil if available (more accurate)
+            import psutil
+            process = psutil.Process()
+            return process.memory_info().rss
+        except ImportError:
+            # Fallback to resource module (standard library)
+            # Note: getrusage returns maxrss in KB on Linux, bytes on macOS
+            usage = resource.getrusage(resource.RUSAGE_SELF)
+            maxrss = usage.ru_maxrss
+            # Convert to bytes (Linux returns KB, macOS returns bytes)
+            if os.name != 'posix' or hasattr(resource, 'RLIM_INFINITY'):
+                # macOS returns bytes directly
+                return maxrss
+            else:
+                # Linux returns KB, convert to bytes
+                return maxrss * 1024
+
+    def memory_logger(self):
+        """Log current memory usage and reschedule."""
+        try:
+            memory_bytes = self._get_memory_usage()
+            # Convert to human-readable format
+            if memory_bytes < 1024:
+                memory_str = f"{memory_bytes} B"
+            elif memory_bytes < 1024 * 1024:
+                memory_str = f"{memory_bytes / 1024:.2f} KB"
+            elif memory_bytes < 1024 * 1024 * 1024:
+                memory_str = f"{memory_bytes / (1024 * 1024):.2f} MB"
+            else:
+                memory_str = f"{memory_bytes / (1024 * 1024 * 1024):.2f} GB"
+
+            logger.info(f"Exporter memory usage: {memory_str} ({memory_bytes:,} bytes)")
+        except Exception as e:
+            logger.error(f"Failed to get memory usage: {e}")
+
+        # Re-schedule memory logging every 60 seconds
+        self.memory_logger_timer = asyncio.get_event_loop().call_later(
+            60,
+            self.memory_logger,
         )
 
     def collect_metrics(self):
