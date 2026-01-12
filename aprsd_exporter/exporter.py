@@ -31,6 +31,7 @@ class APRSDExporter:
         api_port: int = 8081,
         stats_file: str = None,
         loop: AbstractEventLoop = None,
+        max_seen_callsigns: int = 1000,
     ):
         self.loop = loop or asyncio.get_event_loop()
         self.aprsd_url = aprsd_url
@@ -49,6 +50,16 @@ class APRSDExporter:
         self.callsign = None
         self._metrics = None
         self.memory_logger_timer = None
+        # Track ALL callsigns we've ever created metrics for (not just previous iteration)
+        # This helps us identify time series that can be cleaned up
+        self._all_tracked_callsigns = set()
+        # Track previous callsigns to enable cleanup of old metrics
+        self._previous_seen_callsigns = set()
+        # Limit number of callsigns tracked to prevent unbounded memory growth
+        # Only track top N most active callsigns by count
+        self.max_seen_callsigns = max_seen_callsigns
+        # Use a requests session for connection pooling and better resource management
+        self.requests_session = requests.Session()
 
     async def start(self):
         # start prometheus metrics server
@@ -80,6 +91,9 @@ class APRSDExporter:
         if self.flask_thread and self.flask_thread.is_alive():
             # Flask doesn't have a clean shutdown, but since it's in a daemon thread, it will stop with the process
             pass
+        # Close requests session to free resources
+        if hasattr(self, 'requests_session'):
+            self.requests_session.close()
         await self.server.stop()
 
     def _start_flask_api(self):
@@ -292,9 +306,16 @@ class APRSDExporter:
                 # Verify we have valid stats data
                 if not ss.data or "APRSDStats" not in ss.data:
                     logger.warning("Stats file loaded but contains no valid data")
+                    # Explicitly delete to free memory
+                    del ss
                     return None
                 # Wrap in the same format as HTTP response
+                # Note: We keep a reference to ss.data, but ss itself can be GC'd
+                # The data will be processed and then explicitly deleted in update_metrics()
                 stats_obj = {"stats": ss.data}
+                # Delete the StatsStore object (data is still referenced by stats_obj)
+                # This allows Python to free any other memory used by the StatsStore object
+                del ss
                 return stats_obj
             except Exception as e:
                 logger.error(f"Error loading stats from file {self.stats_file}: {e}")
@@ -308,7 +329,7 @@ class APRSDExporter:
         else:
             logger.info("Fetching stats from APRSD URL")
             try:
-                r = requests.get(f"{self.aprsd_url}/stats")
+                r = self.requests_session.get(f"{self.aprsd_url}/stats", timeout=10)
                 if r.status_code != 200:
                     logger.error(f"Failed to get stats from APRSD: {r.status_code}")
                     return None
@@ -345,8 +366,15 @@ class APRSDExporter:
 
         # Clear reference to stats_obj to help with garbage collection
         # The stats dict may be large, especially if SeenList grows unbounded
+        # CRITICAL: Explicitly delete large data structures to free memory immediately
+        if "SeenList" in stats:
+            # The SeenList can be very large - delete it explicitly
+            del stats["SeenList"]
         del stats_obj
         del stats
+        # Force garbage collection hint (Python will decide when to actually GC)
+        import gc
+        gc.collect()
 
     def _update_aprsd_metrics(self, aprsd_stats):
         logger.info("_update_aprsd_metrics")
@@ -457,6 +485,17 @@ class APRSDExporter:
         logger.info("_update_seen_metrics")
         if not seen_list:
             logger.warning("seen_list is empty")
+            # Clean up all previous callsigns if seen_list is empty
+            self._previous_seen_callsigns.clear()
+            # Still report 0 for total count
+            if "seen_callsigns_total" not in self._metrics[SEEN_METRICS]:
+                self._metrics[SEEN_METRICS]["seen_callsigns_total"] = Gauge(
+                    "seen_callsigns_total",
+                    "Total number of unique callsigns in the seen list",
+                    const_labels=self.const_labels,
+                    registry=self.server.registry,
+                )
+            self._metrics[SEEN_METRICS]["seen_callsigns_total"].set({}, 0)
             return
 
         if "callsigns" not in self._metrics[SEEN_METRICS]:
@@ -466,16 +505,66 @@ class APRSDExporter:
                 const_labels=self.const_labels,
                 registry=self.server.registry,
             )
+        
+        # Initialize metric for total count of callsigns in seen list
+        if "seen_callsigns_total" not in self._metrics[SEEN_METRICS]:
+            self._metrics[SEEN_METRICS]["seen_callsigns_total"] = Gauge(
+                "seen_callsigns_total",
+                "Total number of unique callsigns in the seen list",
+                const_labels=self.const_labels,
+                registry=self.server.registry,
+            )
 
-        # Process callsigns - note that Prometheus will store time series for each
-        # callsign, which can grow unbounded if the seen list grows. This is a
-        # limitation of high-cardinality metrics in Prometheus.
-        for callsign in seen_list:
-            callsign_data = seen_list.get(callsign, {})
+        # Report accurate total count of callsigns in seen list
+        total_callsigns = len(seen_list)
+        self._metrics[SEEN_METRICS]["seen_callsigns_total"].set({}, total_callsigns)
+
+        # Limit to top N most active callsigns to prevent unbounded memory growth
+        # Sort by count (activity) and take top N
+        callsign_items = []
+        for callsign, callsign_data in seen_list.items():
             if not callsign_data:
-                logger.warning(f"No data for callsign: {callsign}")
                 continue
+            count = callsign_data.get("count", 0)
+            callsign_items.append((callsign, callsign_data, count))
+        
+        # Sort by count descending and take top N
+        callsign_items.sort(key=lambda x: x[2], reverse=True)
+        top_callsigns = callsign_items[:self.max_seen_callsigns]
+        
+        # Track current callsigns for cleanup
+        current_callsigns = {item[0] for item in top_callsigns}
+        
+        # Clean up metrics for callsigns that are no longer in top N
+        # CRITICAL: Prometheus time series accumulate in memory. Each unique label combination
+        # creates a time series that persists. We need to be aggressive about cleanup.
+        removed_callsigns = self._previous_seen_callsigns - current_callsigns
+        for callsign in removed_callsigns:
+            logger.debug(f"Cleaning up metric for callsign no longer in top {self.max_seen_callsigns}: {callsign}")
+            try:
+                # Set count to 0 to mark as inactive
+                # Note: We can't fully remove time series from Prometheus registry,
+                # but setting to 0 helps and prevents further updates
+                self._metrics[SEEN_METRICS]["callsigns"].set(
+                    {"callsign": callsign, "status": "count"},
+                    0,
+                )
+                # Also clean up the last_seen metric
+                self._metrics[SEEN_METRICS]["callsigns"].set(
+                    {"callsign": callsign, "last_seen": ""},
+                    0,
+                )
+                # Remove from tracking set to free memory
+                self._all_tracked_callsigns.discard(callsign)
+            except Exception as e:
+                logger.debug(f"Error cleaning up metric for {callsign}: {e}")
 
+        # Only update metrics for callsigns currently in top N
+        # This prevents creating new time series for callsigns that aren't active
+        for callsign, callsign_data, _ in top_callsigns:
+            # Track that we've seen this callsign
+            self._all_tracked_callsigns.add(callsign)
+            
             self._metrics[SEEN_METRICS]["callsigns"].set(
                 {"callsign": callsign, "status": "count"},
                 callsign_data.get("count", 0),
@@ -483,6 +572,23 @@ class APRSDExporter:
             self._metrics[SEEN_METRICS]["callsigns"].set(
                 {"callsign": callsign, "last_seen": str(callsign_data.get("last", ""))},
                 1.0,
+            )
+        
+        # Update tracking set for next iteration
+        self._previous_seen_callsigns = current_callsigns
+        
+        # Log memory usage info periodically
+        if len(self._all_tracked_callsigns) > self.max_seen_callsigns * 2:
+            logger.warning(
+                f"Tracking {len(self._all_tracked_callsigns)} total callsign time series "
+                f"(limit: {self.max_seen_callsigns}). This may indicate memory growth. "
+                f"Consider reducing --max-seen-callsigns or increasing cleanup frequency."
+            )
+        
+        if len(seen_list) > self.max_seen_callsigns:
+            logger.debug(
+                f"Seen list has {len(seen_list)} callsigns, "
+                f"tracking top {self.max_seen_callsigns} to limit memory usage"
             )
 
     def _update_plugins_metrics(self, plugins_list):

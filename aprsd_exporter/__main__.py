@@ -91,8 +91,15 @@ class InterceptHandler(logging.Handler):
     default=None,
     help="Path to the statsstore.p file to load stats from instead of fetching from APRSD",
 )
+@click.option(
+    "--max-seen-callsigns",
+    metavar="<max seen callsigns>",
+    type=int,
+    default=1000,
+    help="Maximum number of callsigns to track in seen metrics to limit memory usage. Default is 1000",
+)
 def main(
-    aprsd_url, host, port, update_interval, debug, quiet, api, api_port, stats_file
+    aprsd_url, host, port, update_interval, debug, quiet, api, api_port, stats_file, max_seen_callsigns
 ):
     """Run prometheus exporter"""
     logging.getLogger("asyncio").setLevel(logging.ERROR)
@@ -123,6 +130,7 @@ def main(
         api=api,
         api_port=api_port,
         stats_file=stats_file,
+        max_seen_callsigns=max_seen_callsigns,
     )
     try:
         # start metrics server and listener
