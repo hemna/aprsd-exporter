@@ -1,8 +1,10 @@
 import asyncio
+import linecache
 import os
 import resource
 import socket
 import threading
+import tracemalloc
 from asyncio.events import AbstractEventLoop
 
 import requests
@@ -247,8 +249,36 @@ class APRSDExporter:
             self.metric_updater,
         )
 
+    def log_tracemalloc(self, snap):
+        """Log the top 5 offending memory allocations"""
+        limit = 5
+        key_type = "lineno"
+        snapshot = snap.filter_traces((
+            tracemalloc.Filter(False, "<frozen importlib._bootstrap>"),
+            tracemalloc.Filter(False, "<unknown>"),
+        ))
+        top_stats = snapshot.statistics(key_type)
+
+        logger.info(f"Top {limit}%s lines")
+        for index, stat in enumerate(top_stats[:limit], 1):
+            frame = stat.traceback[0]
+            # replace "/path/to/module/file.py" with "module/file.py"
+            filename = os.sep.join(frame.filename.split(os.sep)[-2:])
+            logger.info("#%s: %s:%s: %.1f KiB" % (index, filename, frame.lineno, stat.size / 1024))
+            line = linecache.getline(frame.filename, frame.lineno).strip()
+            if line:
+                logger.info(f'    {line}')
+
+        other = top_stats[limit:]
+        if other:
+            size = sum(stat.size for stat in other)
+            logger.info(f"{len(other)} other: {size / 1024} KiB")
+        total = sum(stat.size for stat in top_stats)
+        logger.info(f"Total allocated size: {total / 1024} KiB")
+
     def _get_memory_usage(self):
         """Get current memory usage in bytes. Returns RSS (Resident Set Size)."""
+
         try:
             # Try to use psutil if available (more accurate)
             import psutil
@@ -284,6 +314,12 @@ class APRSDExporter:
             logger.info(f"Exporter memory usage: {memory_str} ({memory_bytes:,} bytes)")
         except Exception as e:
             logger.error(f"Failed to get memory usage: {e}")
+
+        try:
+            snap = tracemalloc.take_snapshot()
+            self.log_tracemalloc(snap)
+        except Exception:
+            logger.error("Failed to log tracemalloc")
 
         # Re-schedule memory logging every 60 seconds
         self.memory_logger_timer = asyncio.get_event_loop().call_later(
