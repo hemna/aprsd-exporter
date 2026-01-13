@@ -505,7 +505,7 @@ class APRSDExporter:
                 const_labels=self.const_labels,
                 registry=self.server.registry,
             )
-        
+
         # Initialize metric for total count of callsigns in seen list
         if "seen_callsigns_total" not in self._metrics[SEEN_METRICS]:
             self._metrics[SEEN_METRICS]["seen_callsigns_total"] = Gauge(
@@ -527,14 +527,14 @@ class APRSDExporter:
                 continue
             count = callsign_data.get("count", 0)
             callsign_items.append((callsign, callsign_data, count))
-        
+
         # Sort by count descending and take top N
         callsign_items.sort(key=lambda x: x[2], reverse=True)
         top_callsigns = callsign_items[:self.max_seen_callsigns]
-        
+
         # Track current callsigns for cleanup
         current_callsigns = {item[0] for item in top_callsigns}
-        
+
         # Clean up metrics for callsigns that are no longer in top N
         # CRITICAL: Prometheus time series accumulate in memory. Each unique label combination
         # creates a time series that persists. We need to be aggressive about cleanup.
@@ -564,7 +564,7 @@ class APRSDExporter:
         for callsign, callsign_data, _ in top_callsigns:
             # Track that we've seen this callsign
             self._all_tracked_callsigns.add(callsign)
-            
+
             self._metrics[SEEN_METRICS]["callsigns"].set(
                 {"callsign": callsign, "status": "count"},
                 callsign_data.get("count", 0),
@@ -573,10 +573,10 @@ class APRSDExporter:
                 {"callsign": callsign, "last_seen": str(callsign_data.get("last", ""))},
                 1.0,
             )
-        
+
         # Update tracking set for next iteration
         self._previous_seen_callsigns = current_callsigns
-        
+
         # Log memory usage info periodically
         if len(self._all_tracked_callsigns) > self.max_seen_callsigns * 2:
             logger.warning(
@@ -584,7 +584,7 @@ class APRSDExporter:
                 f"(limit: {self.max_seen_callsigns}). This may indicate memory growth. "
                 f"Consider reducing --max-seen-callsigns or increasing cleanup frequency."
             )
-        
+
         if len(seen_list) > self.max_seen_callsigns:
             logger.debug(
                 f"Seen list has {len(seen_list)} callsigns, "
