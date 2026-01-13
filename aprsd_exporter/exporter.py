@@ -151,7 +151,7 @@ class APRSDExporter:
                     "aprsd": Gauge(
                         "aprsd",
                         "APRSD Stats",
-                        labelnames=list(self.const_labels.keys()) + ["version", "callsign"],
+                        labelnames=list(self.const_labels.keys()) + ["version"],
                     ),
                     "aprsd_memory": Gauge(
                         "aprsd_memory",
@@ -424,9 +424,7 @@ class APRSDExporter:
         # self._metrics[APRSD_STATS]['aprsd'].labels(
         #     **{**self.const_labels, 'uptime': aprsd_stats['uptime']}
         # ).set(1.0)
-        self._metrics[APRSD_STATS]["aprsd"].labels(
-            **{**self.const_labels, "callsign": aprsd_stats.get("callsign", "UNKNOWN")}
-        ).set(1.0)
+        # Note: callsign is already in const_labels, so we don't need a separate time series for it
         self._metrics[APRSD_STATS]["aprsd_memory"].labels(
             **{**self.const_labels, "type": "current"}
         ).set(aprsd_stats.get("memory_current", 0))
