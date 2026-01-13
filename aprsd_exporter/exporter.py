@@ -1,4 +1,5 @@
 import asyncio
+import gc
 import linecache
 import os
 import resource
@@ -234,6 +235,7 @@ class APRSDExporter:
     def metric_updater(self):
         logger.info("metric_updater")
         self.update_metrics()
+        gc.collect()
 
         # re-schedule another metrics update
         self.timer = asyncio.get_event_loop().call_later(
