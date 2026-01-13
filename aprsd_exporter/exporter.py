@@ -8,8 +8,7 @@ import tracemalloc
 from asyncio.events import AbstractEventLoop
 
 import requests
-from aioprometheus import Gauge
-from aioprometheus.service import Service
+from prometheus_client import Gauge, start_http_server
 from aprsd.threads.stats import StatsStore
 from flask import Flask, jsonify, request
 from loguru import logger
@@ -44,7 +43,7 @@ class APRSDExporter:
         self.api_port = api_port
         self.stats_file = stats_file
         self.metrics_task = None
-        self.server = Service()
+        self.metrics_server_thread = None
         self.flask_app = None
         self.flask_thread = None
         self.received_stats = None
@@ -64,9 +63,15 @@ class APRSDExporter:
         self.requests_session = requests.Session()
 
     async def start(self):
-        # start prometheus metrics server
-        await self.server.start(addr=self.host, port=self.port)
-        logger.info(f"Serving APRSD prometheus metrics on: {self.server.metrics_url}")
+        # start prometheus metrics server in a separate thread
+        self.metrics_server_thread = threading.Thread(
+            target=start_http_server,
+            args=(self.port,),
+            kwargs={"addr": self.host},
+            daemon=True,
+        )
+        self.metrics_server_thread.start()
+        logger.info(f"Serving APRSD prometheus metrics on: http://{self.host}:{self.port}")
 
         if self.api:
             self._start_flask_api()
@@ -96,7 +101,7 @@ class APRSDExporter:
         # Close requests session to free resources
         if hasattr(self, 'requests_session'):
             self.requests_session.close()
-        await self.server.stop()
+        # prometheus_client server runs in a daemon thread, so it will stop with the process
 
     def _start_flask_api(self):
         self.flask_app = Flask(__name__)
@@ -132,106 +137,93 @@ class APRSDExporter:
 
     def register_metrics(self):
         if not self._metrics:
-            # Define some constant labels that need to be added to all metrics
-            self.const_labels = {
-                "host": socket.gethostname(),
-                "app": f"{self.__class__.__name__}",
-                "callsign": self.callsign or "unknown",
-            }
-            const_labels = self.const_labels
+            # Ensure const_labels is defined (should be set in update_metrics before calling this)
+            if not hasattr(self, 'const_labels'):
+                self.const_labels = {
+                    "host": socket.gethostname(),
+                    "app": f"{self.__class__.__name__}",
+                    "callsign": self.callsign or "unknown",
+                }
+            # prometheus_client uses labelnames parameter instead of const_labels
+            # We'll add const_labels as default labels when setting values
             self._metrics = {
                 APRSD_STATS: {
                     "aprsd": Gauge(
                         "aprsd",
                         "APRSD Stats",
-                        const_labels=const_labels,
-                        registry=self.server.registry,
+                        labelnames=list(self.const_labels.keys()) + ["version", "callsign"],
                     ),
                     "aprsd_memory": Gauge(
                         "aprsd_memory",
                         "APRSD Memory Usage",
-                        const_labels=const_labels,
-                        registry=self.server.registry,
+                        labelnames=list(self.const_labels.keys()) + ["type"],
                     ),
                 },
                 PACKET_METRICS: {
                     "Packets": Gauge(
                         "Packets",
                         "Total number of packets sent/received",
-                        const_labels=const_labels,
-                        registry=self.server.registry,
+                        labelnames=list(self.const_labels.keys()) + ["count"],
                     ),
                     "AckPacket": Gauge(
                         "AckPacket",
                         "Ack Packet Totals",
-                        const_labels=const_labels,
-                        registry=self.server.registry,
+                        labelnames=list(self.const_labels.keys()) + ["count"],
                     ),
                     "BeaconPacket": Gauge(
                         "BeaconPacket",
                         "Beacon type packets",
-                        const_labels=const_labels,
-                        registry=self.server.registry,
+                        labelnames=list(self.const_labels.keys()) + ["count"],
                     ),
                     "BulletinPacket": Gauge(
                         "BulletinPacket",
                         "Bulletin type packets",
-                        const_labels=const_labels,
-                        registry=self.server.registry,
+                        labelnames=list(self.const_labels.keys()) + ["count"],
                     ),
                     "MessagePacket": Gauge(
                         "MessagePacket",
                         "Message type packets",
-                        const_labels=const_labels,
-                        registry=self.server.registry,
+                        labelnames=list(self.const_labels.keys()) + ["count"],
                     ),
                     "MicEPacket": Gauge(
                         "MicEPacket",
                         "Mic E Packets",
-                        const_labels=const_labels,
-                        registry=self.server.registry,
+                        labelnames=list(self.const_labels.keys()) + ["count"],
                     ),
                     "ObjectPacket": Gauge(
                         "ObjectPacket",
                         "Object Packets",
-                        const_labels=const_labels,
-                        registry=self.server.registry,
+                        labelnames=list(self.const_labels.keys()) + ["count"],
                     ),
                     "RejectPacket": Gauge(
                         "RejectPacket",
                         "Reject Packets",
-                        const_labels=const_labels,
-                        registry=self.server.registry,
+                        labelnames=list(self.const_labels.keys()) + ["count"],
                     ),
                     "StatusPacket": Gauge(
                         "StatusPacket",
                         "Status Packets",
-                        const_labels=const_labels,
-                        registry=self.server.registry,
+                        labelnames=list(self.const_labels.keys()) + ["count"],
                     ),
                     "TelemetryPacket": Gauge(
                         "TelemetryPacket",
                         "Telemetry Packets",
-                        const_labels=const_labels,
-                        registry=self.server.registry,
+                        labelnames=list(self.const_labels.keys()) + ["count"],
                     ),
                     "ThirdPartyPacket": Gauge(
                         "ThirdPartyPacket",
                         "Third Party Packets",
-                        const_labels=const_labels,
-                        registry=self.server.registry,
+                        labelnames=list(self.const_labels.keys()) + ["count"],
                     ),
                     "WeatherPacket": Gauge(
                         "WeatherPacket",
                         "Weather Packets",
-                        const_labels=const_labels,
-                        registry=self.server.registry,
+                        labelnames=list(self.const_labels.keys()) + ["count"],
                     ),
                     "UnknownPacket": Gauge(
                         "UnknownPacket",
                         "Total number of unknown packets received",
-                        const_labels=const_labels,
-                        registry=self.server.registry,
+                        labelnames=list(self.const_labels.keys()) + ["count"],
                     ),
                 },
                 THREAD_METRICS: {},
@@ -389,6 +381,13 @@ class APRSDExporter:
             return
 
         self.callsign = stats["APRSDStats"].get("callsign", "UNKNOWN")
+        # Update const_labels with current callsign before registering metrics
+        if not hasattr(self, 'const_labels') or self.const_labels.get("callsign") != self.callsign:
+            self.const_labels = {
+                "host": socket.gethostname(),
+                "app": f"{self.__class__.__name__}",
+                "callsign": self.callsign or "unknown",
+            }
         self.register_metrics()
         if self._metrics:
             self._update_aprsd_metrics(stats["APRSDStats"])
@@ -419,25 +418,21 @@ class APRSDExporter:
             logger.warning("aprsd_stats is empty")
             return
 
-        self._metrics[APRSD_STATS]["aprsd"].set(
-            {"version": aprsd_stats.get("version", "UNKNOWN")},
-            1.0,
-        )
-        # self._metrics[APRSD_STATS]['aprsd'].set(
-        #     {'uptime': aprsd_stats['uptime']}, 1.0
-        # )
-        self._metrics[APRSD_STATS]["aprsd"].set(
-            {"callsign": aprsd_stats.get("callsign", "UNKNOWN")},
-            1.0,
-        )
-        self._metrics[APRSD_STATS]["aprsd_memory"].set(
-            {"type": "current"},
-            aprsd_stats.get("memory_current", 0),
-        )
-        self._metrics[APRSD_STATS]["aprsd_memory"].set(
-            {"type": "peak"},
-            aprsd_stats.get("memory_peak", 0),
-        )
+        self._metrics[APRSD_STATS]["aprsd"].labels(
+            **{**self.const_labels, "version": aprsd_stats.get("version", "UNKNOWN")}
+        ).set(1.0)
+        # self._metrics[APRSD_STATS]['aprsd'].labels(
+        #     **{**self.const_labels, 'uptime': aprsd_stats['uptime']}
+        # ).set(1.0)
+        self._metrics[APRSD_STATS]["aprsd"].labels(
+            **{**self.const_labels, "callsign": aprsd_stats.get("callsign", "UNKNOWN")}
+        ).set(1.0)
+        self._metrics[APRSD_STATS]["aprsd_memory"].labels(
+            **{**self.const_labels, "type": "current"}
+        ).set(aprsd_stats.get("memory_current", 0))
+        self._metrics[APRSD_STATS]["aprsd_memory"].labels(
+            **{**self.const_labels, "type": "peak"}
+        ).set(aprsd_stats.get("memory_peak", 0))
 
     def _update_packet_metrics(self, packet_list):
         logger.info("_update_packet_metrics")
@@ -445,28 +440,23 @@ class APRSDExporter:
             logger.warning("packet_list is empty")
             return
 
-        self._metrics[PACKET_METRICS]["Packets"].set(
-            {"count": "total"},
-            packet_list.get("total_tracked", 0),
-        )
-        self._metrics[PACKET_METRICS]["Packets"].set(
-            {"count": "tx"},
-            packet_list.get("tx", 0),
-        )
-        self._metrics[PACKET_METRICS]["Packets"].set(
-            {"count": "rx"},
-            packet_list.get("rx", 0),
-        )
+        self._metrics[PACKET_METRICS]["Packets"].labels(
+            **{**self.const_labels, "count": "total"}
+        ).set(packet_list.get("total_tracked", 0))
+        self._metrics[PACKET_METRICS]["Packets"].labels(
+            **{**self.const_labels, "count": "tx"}
+        ).set(packet_list.get("tx", 0))
+        self._metrics[PACKET_METRICS]["Packets"].labels(
+            **{**self.const_labels, "count": "rx"}
+        ).set(packet_list.get("rx", 0))
         for packet_type in packet_list.get("types", {}):
             logger.debug(f"packet_type: {packet_type}")
-            self._metrics[PACKET_METRICS][packet_type].set(
-                {"count": "tx"},
-                packet_list["types"][packet_type].get("tx", 0),
-            )
-            self._metrics[PACKET_METRICS][packet_type].set(
-                {"count": "rx"},
-                packet_list["types"][packet_type].get("rx", 0),
-            )
+            self._metrics[PACKET_METRICS][packet_type].labels(
+                **{**self.const_labels, "count": "tx"}
+            ).set(packet_list["types"][packet_type].get("tx", 0))
+            self._metrics[PACKET_METRICS][packet_type].labels(
+                **{**self.const_labels, "count": "rx"}
+            ).set(packet_list["types"][packet_type].get("rx", 0))
 
     def _update_thread_metrics(self, thread_list):
         logger.info("_update_thread_metrics")
@@ -488,8 +478,7 @@ class APRSDExporter:
                     self._metrics[THREAD_METRICS][thread] = Gauge(
                         thread,
                         f"Thread {thread} status",
-                        const_labels=self.const_labels,
-                        registry=self.server.registry,
+                        labelnames=list(self.const_labels.keys()) + ["class", "alive", "status"],
                     )
                 except Exception:
                     logger.error(f"Failed to create metric for thread: {thread}")
@@ -501,21 +490,18 @@ class APRSDExporter:
                 continue
 
             logger.info(f"thread_list[thread]: {thread_data}")
-            self._metrics[THREAD_METRICS][thread].set(
-                {"class": thread_data.get("class", "UNKNOWN")},
-                1.0,
-            )
-            self._metrics[THREAD_METRICS][thread].set(
-                {"alive": str(thread_data.get("alive", False))},
-                1.0,
-            )
-            # self._metrics[THREAD_METRICS][thread].set(
-            #     {'age': thread_list[thread]['age']}, 1.0
-            # )
-            self._metrics[THREAD_METRICS][thread].set(
-                {"status": "loop_count"},
-                thread_data.get("loop_count", 0),
-            )
+            self._metrics[THREAD_METRICS][thread].labels(
+                **{**self.const_labels, "class": thread_data.get("class", "UNKNOWN"), "alive": "", "status": ""}
+            ).set(1.0)
+            self._metrics[THREAD_METRICS][thread].labels(
+                **{**self.const_labels, "class": "", "alive": str(thread_data.get("alive", False)), "status": ""}
+            ).set(1.0)
+            # self._metrics[THREAD_METRICS][thread].labels(
+            #     **{**self.const_labels, 'class': '', 'alive': '', 'age': thread_list[thread]['age']}
+            # ).set(1.0)
+            self._metrics[THREAD_METRICS][thread].labels(
+                **{**self.const_labels, "class": "", "alive": "", "status": "loop_count"}
+            ).set(thread_data.get("loop_count", 0))
 
     def _update_seen_metrics(self, seen_list):
         logger.info("_update_seen_metrics")
@@ -528,18 +514,16 @@ class APRSDExporter:
                 self._metrics[SEEN_METRICS]["seen_callsigns_total"] = Gauge(
                     "seen_callsigns_total",
                     "Total number of unique callsigns in the seen list",
-                    const_labels=self.const_labels,
-                    registry=self.server.registry,
+                    labelnames=list(self.const_labels.keys()),
                 )
-            self._metrics[SEEN_METRICS]["seen_callsigns_total"].set({}, 0)
+            self._metrics[SEEN_METRICS]["seen_callsigns_total"].labels(**self.const_labels).set(0)
             return
 
         if "callsigns" not in self._metrics[SEEN_METRICS]:
             self._metrics[SEEN_METRICS]["callsigns"] = Gauge(
                 "callsigns",
                 "The stats of callsigns seen by APRSD",
-                const_labels=self.const_labels,
-                registry=self.server.registry,
+                labelnames=list(self.const_labels.keys()) + ["callsign", "status", "last_seen"],
             )
 
         # Initialize metric for total count of callsigns in seen list
@@ -547,13 +531,12 @@ class APRSDExporter:
             self._metrics[SEEN_METRICS]["seen_callsigns_total"] = Gauge(
                 "seen_callsigns_total",
                 "Total number of unique callsigns in the seen list",
-                const_labels=self.const_labels,
-                registry=self.server.registry,
+                labelnames=list(self.const_labels.keys()),
             )
 
         # Report accurate total count of callsigns in seen list
         total_callsigns = len(seen_list)
-        self._metrics[SEEN_METRICS]["seen_callsigns_total"].set({}, total_callsigns)
+        self._metrics[SEEN_METRICS]["seen_callsigns_total"].labels(**self.const_labels).set(total_callsigns)
 
         # Limit to top N most active callsigns to prevent unbounded memory growth
         # Sort by count (activity) and take top N
@@ -581,15 +564,13 @@ class APRSDExporter:
                 # Set count to 0 to mark as inactive
                 # Note: We can't fully remove time series from Prometheus registry,
                 # but setting to 0 helps and prevents further updates
-                self._metrics[SEEN_METRICS]["callsigns"].set(
-                    {"callsign": callsign, "status": "count"},
-                    0,
-                )
-                # Also clean up the last_seen metric
-                self._metrics[SEEN_METRICS]["callsigns"].set(
-                    {"callsign": callsign, "last_seen": ""},
-                    0,
-                )
+                self._metrics[SEEN_METRICS]["callsigns"].labels(
+                    **{**self.const_labels, "callsign": callsign, "status": "count", "last_seen": ""}
+                ).set(0)
+                # Also clean up the last_seen metric (use empty string for last_seen since we don't have the data)
+                self._metrics[SEEN_METRICS]["callsigns"].labels(
+                    **{**self.const_labels, "callsign": callsign, "status": "", "last_seen": ""}
+                ).set(0)
                 # Remove from tracking set to free memory
                 self._all_tracked_callsigns.discard(callsign)
             except Exception as e:
@@ -601,14 +582,12 @@ class APRSDExporter:
             # Track that we've seen this callsign
             self._all_tracked_callsigns.add(callsign)
 
-            self._metrics[SEEN_METRICS]["callsigns"].set(
-                {"callsign": callsign, "status": "count"},
-                callsign_data.get("count", 0),
-            )
-            self._metrics[SEEN_METRICS]["callsigns"].set(
-                {"callsign": callsign, "last_seen": str(callsign_data.get("last", ""))},
-                1.0,
-            )
+            self._metrics[SEEN_METRICS]["callsigns"].labels(
+                **{**self.const_labels, "callsign": callsign, "status": "count", "last_seen": ""}
+            ).set(callsign_data.get("count", 0))
+            self._metrics[SEEN_METRICS]["callsigns"].labels(
+                **{**self.const_labels, "callsign": callsign, "status": "", "last_seen": str(callsign_data.get("last", ""))}
+            ).set(1.0)
 
         # Update tracking set for next iteration
         self._previous_seen_callsigns = current_callsigns
@@ -640,8 +619,7 @@ class APRSDExporter:
                     self._metrics[PLUGINS_METRICS][plugin_name] = Gauge(
                         plugin_name,
                         f"Plugin {plugin_name} status",
-                        const_labels=self.const_labels,
-                        registry=self.server.registry,
+                        labelnames=list(self.const_labels.keys()) + ["packets", "enabled", "version", "name"],
                     )
                 except Exception:
                     logger.error(f"Failed to create metric for plugin: {plugin}")
@@ -652,20 +630,18 @@ class APRSDExporter:
                 logger.warning(f"No data for plugin: {plugin}")
                 continue
 
-            self._metrics[PLUGINS_METRICS][plugin_name].set(
-                {"packets": "tx"},
-                plugin_data.get("tx", 0),
-            )
-            self._metrics[PLUGINS_METRICS][plugin_name].set(
-                {"packets": "rx"},
-                plugin_data.get("rx", 0),
-            )
-            self._metrics[PLUGINS_METRICS][plugin_name].set(
-                {"enabled": plugins_list[plugin]["enabled"]},
-                1.0,
-            )
-            self._metrics[PLUGINS_METRICS][plugin_name].set(
-                {"version": plugins_list[plugin]["version"]},
-                1.0,
-            )
-            self._metrics[PLUGINS_METRICS][plugin_name].set({"name": plugin}, 1.0)
+            self._metrics[PLUGINS_METRICS][plugin_name].labels(
+                **{**self.const_labels, "packets": "tx", "enabled": "", "version": "", "name": ""}
+            ).set(plugin_data.get("tx", 0))
+            self._metrics[PLUGINS_METRICS][plugin_name].labels(
+                **{**self.const_labels, "packets": "rx", "enabled": "", "version": "", "name": ""}
+            ).set(plugin_data.get("rx", 0))
+            self._metrics[PLUGINS_METRICS][plugin_name].labels(
+                **{**self.const_labels, "packets": "", "enabled": str(plugins_list[plugin]["enabled"]), "version": "", "name": ""}
+            ).set(1.0)
+            self._metrics[PLUGINS_METRICS][plugin_name].labels(
+                **{**self.const_labels, "packets": "", "enabled": "", "version": str(plugins_list[plugin]["version"]), "name": ""}
+            ).set(1.0)
+            self._metrics[PLUGINS_METRICS][plugin_name].labels(
+                **{**self.const_labels, "packets": "", "enabled": "", "version": "", "name": plugin}
+            ).set(1.0)

@@ -23,7 +23,7 @@ requires-python = ">=3.10"
 dynamic = ["version"]
 
 dependencies = [
-    "aioprometheus[aiohttp]",
+    "prometheus_client",
     "aprsd",
     "click",
     "flask",
