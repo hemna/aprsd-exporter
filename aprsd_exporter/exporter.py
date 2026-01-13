@@ -142,7 +142,7 @@ class APRSDExporter:
                 self.const_labels = {
                     "host": socket.gethostname(),
                     "app": f"{self.__class__.__name__}",
-                    "callsign": self.callsign or "unknown",
+                    "instance_callsign": self.callsign or "unknown",
                 }
             # prometheus_client uses labelnames parameter instead of const_labels
             # We'll add const_labels as default labels when setting values
@@ -382,11 +382,12 @@ class APRSDExporter:
 
         self.callsign = stats["APRSDStats"].get("callsign", "UNKNOWN")
         # Update const_labels with current callsign before registering metrics
-        if not hasattr(self, 'const_labels') or self.const_labels.get("callsign") != self.callsign:
+        # Use "instance_callsign" to avoid conflict with "callsign" label used for seen stations
+        if not hasattr(self, 'const_labels') or self.const_labels.get("instance_callsign") != self.callsign:
             self.const_labels = {
                 "host": socket.gethostname(),
                 "app": f"{self.__class__.__name__}",
-                "callsign": self.callsign or "unknown",
+                "instance_callsign": self.callsign or "unknown",
             }
         self.register_metrics()
         if self._metrics:
