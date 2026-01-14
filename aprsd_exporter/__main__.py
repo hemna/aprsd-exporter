@@ -2,8 +2,8 @@
 
 import asyncio
 import inspect
-import logging
 import linecache
+import logging
 import os
 import tracemalloc
 
@@ -15,10 +15,12 @@ from .exporter import APRSDExporter
 
 def display_top_stats(snapshot, key_type="lineno", limit=5):
     """Show the top offenders in memeory consumption."""
-    snapshot = snapshot.filter_traces((
-        tracemalloc.Filter(False, "<frozen importlib._bootstrap>"),
-        tracemalloc.Filter(False, "<unknown>"),
-    ))
+    snapshot = snapshot.filter_traces(
+        (
+            tracemalloc.Filter(False, "<frozen importlib._bootstrap>"),
+            tracemalloc.Filter(False, "<unknown>"),
+        )
+    )
     top_stats = snapshot.statistics(key_type)
 
     print("Top %s lines" % limit)
@@ -26,11 +28,12 @@ def display_top_stats(snapshot, key_type="lineno", limit=5):
         frame = stat.traceback[0]
         # replace "/path/to/module/file.py" with "module/file.py"
         filename = os.sep.join(frame.filename.split(os.sep)[-2:])
-        print("#%s: %s:%s: %.1f KiB"
-              % (index, filename, frame.lineno, stat.size / 1024))
+        print(
+            "#%s: %s:%s: %.1f KiB" % (index, filename, frame.lineno, stat.size / 1024)
+        )
         line = linecache.getline(frame.filename, frame.lineno).strip()
         if line:
-            print('    %s' % line)
+            print("    %s" % line)
 
     other = top_stats[limit:]
     if other:
@@ -125,11 +128,20 @@ class InterceptHandler(logging.Handler):
     "--max-seen-callsigns",
     metavar="<max seen callsigns>",
     type=int,
-    default=1000,
+    default=100,
     help="Maximum number of callsigns to track in seen metrics to limit memory usage. Default is 1000",
 )
 def main(
-    aprsd_url, host, port, update_interval, debug, quiet, api, api_port, stats_file, max_seen_callsigns
+    aprsd_url,
+    host,
+    port,
+    update_interval,
+    debug,
+    quiet,
+    api,
+    api_port,
+    stats_file,
+    max_seen_callsigns,
 ):
     """Run prometheus exporter"""
     tracemalloc.start()
