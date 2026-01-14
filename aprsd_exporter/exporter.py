@@ -9,11 +9,11 @@ import tracemalloc
 from asyncio.events import AbstractEventLoop
 
 import requests
-from prometheus_client import Gauge, start_http_server
 from aprsd.threads.stats import StatsStore
 from flask import Flask, jsonify, request
 from loguru import logger
 from oslo_config import cfg
+from prometheus_client import Gauge, start_http_server
 
 APRSD_STATS = "aprsd"
 PACKET_METRICS = "packets"
@@ -33,7 +33,7 @@ class APRSDExporter:
         api_port: int = 8081,
         stats_file: str = None,
         loop: AbstractEventLoop = None,
-        max_seen_callsigns: int = 1000,
+        max_seen_callsigns: int = 250,
     ):
         self.loop = loop or asyncio.get_event_loop()
         self.aprsd_url = aprsd_url
@@ -72,7 +72,9 @@ class APRSDExporter:
             daemon=True,
         )
         self.metrics_server_thread.start()
-        logger.info(f"Serving APRSD prometheus metrics on: http://{self.host}:{self.port}")
+        logger.info(
+            f"Serving APRSD prometheus metrics on: http://{self.host}:{self.port}"
+        )
 
         if self.api:
             self._start_flask_api()
@@ -100,7 +102,7 @@ class APRSDExporter:
             # Flask doesn't have a clean shutdown, but since it's in a daemon thread, it will stop with the process
             pass
         # Close requests session to free resources
-        if hasattr(self, 'requests_session'):
+        if hasattr(self, "requests_session"):
             self.requests_session.close()
         # prometheus_client server runs in a daemon thread, so it will stop with the process
 
@@ -139,7 +141,7 @@ class APRSDExporter:
     def register_metrics(self):
         if not self._metrics:
             # Ensure const_labels is defined (should be set in update_metrics before calling this)
-            if not hasattr(self, 'const_labels'):
+            if not hasattr(self, "const_labels"):
                 self.const_labels = {
                     "host": socket.gethostname(),
                     "app": f"{self.__class__.__name__}",
@@ -247,10 +249,12 @@ class APRSDExporter:
         """Log the top 5 offending memory allocations"""
         limit = 5
         key_type = "lineno"
-        snapshot = snap.filter_traces((
-            tracemalloc.Filter(False, "<frozen importlib._bootstrap>"),
-            tracemalloc.Filter(False, "<unknown>"),
-        ))
+        snapshot = snap.filter_traces(
+            (
+                tracemalloc.Filter(False, "<frozen importlib._bootstrap>"),
+                tracemalloc.Filter(False, "<unknown>"),
+            )
+        )
         top_stats = snapshot.statistics(key_type)
 
         logger.info(f"Top {limit}%s lines")
@@ -258,10 +262,13 @@ class APRSDExporter:
             frame = stat.traceback[0]
             # replace "/path/to/module/file.py" with "module/file.py"
             filename = os.sep.join(frame.filename.split(os.sep)[-2:])
-            logger.info("#%s: %s:%s: %.1f KiB" % (index, filename, frame.lineno, stat.size / 1024))
+            logger.info(
+                "#%s: %s:%s: %.1f KiB"
+                % (index, filename, frame.lineno, stat.size / 1024)
+            )
             line = linecache.getline(frame.filename, frame.lineno).strip()
             if line:
-                logger.info(f'    {line}')
+                logger.info(f"    {line}")
 
         other = top_stats[limit:]
         if other:
@@ -276,6 +283,7 @@ class APRSDExporter:
         try:
             # Try to use psutil if available (more accurate)
             import psutil
+
             process = psutil.Process()
             return process.memory_info().rss
         except ImportError:
@@ -284,7 +292,7 @@ class APRSDExporter:
             usage = resource.getrusage(resource.RUSAGE_SELF)
             maxrss = usage.ru_maxrss
             # Convert to bytes (Linux returns KB, macOS returns bytes)
-            if os.name != 'posix' or hasattr(resource, 'RLIM_INFINITY'):
+            if os.name != "posix" or hasattr(resource, "RLIM_INFINITY"):
                 # macOS returns bytes directly
                 return maxrss
             else:
@@ -385,7 +393,10 @@ class APRSDExporter:
         self.callsign = stats["APRSDStats"].get("callsign", "UNKNOWN")
         # Update const_labels with current callsign before registering metrics
         # Use "instance_callsign" to avoid conflict with "callsign" label used for seen stations
-        if not hasattr(self, 'const_labels') or self.const_labels.get("instance_callsign") != self.callsign:
+        if (
+            not hasattr(self, "const_labels")
+            or self.const_labels.get("instance_callsign") != self.callsign
+        ):
             self.const_labels = {
                 "host": socket.gethostname(),
                 "app": f"{self.__class__.__name__}",
@@ -412,6 +423,7 @@ class APRSDExporter:
         del stats
         # Force garbage collection hint (Python will decide when to actually GC)
         import gc
+
         gc.collect()
 
     def _update_aprsd_metrics(self, aprsd_stats):
@@ -479,7 +491,8 @@ class APRSDExporter:
                     self._metrics[THREAD_METRICS][thread] = Gauge(
                         thread,
                         f"Thread {thread} status",
-                        labelnames=list(self.const_labels.keys()) + ["class", "alive", "status"],
+                        labelnames=list(self.const_labels.keys())
+                        + ["class", "alive", "status"],
                     )
                 except Exception:
                     logger.error(f"Failed to create metric for thread: {thread}")
@@ -492,16 +505,31 @@ class APRSDExporter:
 
             logger.info(f"thread_list[thread]: {thread_data}")
             self._metrics[THREAD_METRICS][thread].labels(
-                **{**self.const_labels, "class": thread_data.get("class", "UNKNOWN"), "alive": "", "status": ""}
+                **{
+                    **self.const_labels,
+                    "class": thread_data.get("class", "UNKNOWN"),
+                    "alive": "",
+                    "status": "",
+                }
             ).set(1.0)
             self._metrics[THREAD_METRICS][thread].labels(
-                **{**self.const_labels, "class": "", "alive": str(thread_data.get("alive", False)), "status": ""}
+                **{
+                    **self.const_labels,
+                    "class": "",
+                    "alive": str(thread_data.get("alive", False)),
+                    "status": "",
+                }
             ).set(1.0)
             # self._metrics[THREAD_METRICS][thread].labels(
             #     **{**self.const_labels, 'class': '', 'alive': '', 'age': thread_list[thread]['age']}
             # ).set(1.0)
             self._metrics[THREAD_METRICS][thread].labels(
-                **{**self.const_labels, "class": "", "alive": "", "status": "loop_count"}
+                **{
+                    **self.const_labels,
+                    "class": "",
+                    "alive": "",
+                    "status": "loop_count",
+                }
             ).set(thread_data.get("loop_count", 0))
 
     def _update_seen_metrics(self, seen_list):
@@ -517,14 +545,17 @@ class APRSDExporter:
                     "Total number of unique callsigns in the seen list",
                     labelnames=list(self.const_labels.keys()),
                 )
-            self._metrics[SEEN_METRICS]["seen_callsigns_total"].labels(**self.const_labels).set(0)
+            self._metrics[SEEN_METRICS]["seen_callsigns_total"].labels(
+                **self.const_labels
+            ).set(0)
             return
 
         if "callsigns" not in self._metrics[SEEN_METRICS]:
             self._metrics[SEEN_METRICS]["callsigns"] = Gauge(
                 "callsigns",
                 "The stats of callsigns seen by APRSD",
-                labelnames=list(self.const_labels.keys()) + ["callsign", "status", "last_seen"],
+                labelnames=list(self.const_labels.keys())
+                + ["callsign", "status", "last_seen"],
             )
 
         # Initialize metric for total count of callsigns in seen list
@@ -537,7 +568,9 @@ class APRSDExporter:
 
         # Report accurate total count of callsigns in seen list
         total_callsigns = len(seen_list)
-        self._metrics[SEEN_METRICS]["seen_callsigns_total"].labels(**self.const_labels).set(total_callsigns)
+        self._metrics[SEEN_METRICS]["seen_callsigns_total"].labels(
+            **self.const_labels
+        ).set(total_callsigns)
 
         # Limit to top N most active callsigns to prevent unbounded memory growth
         # Sort by count (activity) and take top N
@@ -550,7 +583,7 @@ class APRSDExporter:
 
         # Sort by count descending and take top N
         callsign_items.sort(key=lambda x: x[2], reverse=True)
-        top_callsigns = callsign_items[:self.max_seen_callsigns]
+        top_callsigns = callsign_items[: self.max_seen_callsigns]
 
         # Track current callsigns for cleanup
         current_callsigns = {item[0] for item in top_callsigns}
@@ -560,17 +593,29 @@ class APRSDExporter:
         # creates a time series that persists. We need to be aggressive about cleanup.
         removed_callsigns = self._previous_seen_callsigns - current_callsigns
         for callsign in removed_callsigns:
-            logger.debug(f"Cleaning up metric for callsign no longer in top {self.max_seen_callsigns}: {callsign}")
+            logger.debug(
+                f"Cleaning up metric for callsign no longer in top {self.max_seen_callsigns}: {callsign}"
+            )
             try:
                 # Set count to 0 to mark as inactive
                 # Note: We can't fully remove time series from Prometheus registry,
                 # but setting to 0 helps and prevents further updates
                 self._metrics[SEEN_METRICS]["callsigns"].labels(
-                    **{**self.const_labels, "callsign": callsign, "status": "count", "last_seen": ""}
+                    **{
+                        **self.const_labels,
+                        "callsign": callsign,
+                        "status": "count",
+                        "last_seen": "",
+                    }
                 ).set(0)
                 # Also clean up the last_seen metric (use empty string for last_seen since we don't have the data)
                 self._metrics[SEEN_METRICS]["callsigns"].labels(
-                    **{**self.const_labels, "callsign": callsign, "status": "", "last_seen": ""}
+                    **{
+                        **self.const_labels,
+                        "callsign": callsign,
+                        "status": "",
+                        "last_seen": "",
+                    }
                 ).set(0)
                 # Remove from tracking set to free memory
                 self._all_tracked_callsigns.discard(callsign)
@@ -584,10 +629,20 @@ class APRSDExporter:
             self._all_tracked_callsigns.add(callsign)
 
             self._metrics[SEEN_METRICS]["callsigns"].labels(
-                **{**self.const_labels, "callsign": callsign, "status": "count", "last_seen": ""}
+                **{
+                    **self.const_labels,
+                    "callsign": callsign,
+                    "status": "count",
+                    "last_seen": "",
+                }
             ).set(callsign_data.get("count", 0))
             self._metrics[SEEN_METRICS]["callsigns"].labels(
-                **{**self.const_labels, "callsign": callsign, "status": "", "last_seen": str(callsign_data.get("last", ""))}
+                **{
+                    **self.const_labels,
+                    "callsign": callsign,
+                    "status": "",
+                    "last_seen": str(callsign_data.get("last", "")),
+                }
             ).set(1.0)
 
         # Update tracking set for next iteration
@@ -620,7 +675,8 @@ class APRSDExporter:
                     self._metrics[PLUGINS_METRICS][plugin_name] = Gauge(
                         plugin_name,
                         f"Plugin {plugin_name} status",
-                        labelnames=list(self.const_labels.keys()) + ["packets", "enabled", "version", "name"],
+                        labelnames=list(self.const_labels.keys())
+                        + ["packets", "enabled", "version", "name"],
                     )
                 except Exception:
                     logger.error(f"Failed to create metric for plugin: {plugin}")
@@ -632,17 +688,47 @@ class APRSDExporter:
                 continue
 
             self._metrics[PLUGINS_METRICS][plugin_name].labels(
-                **{**self.const_labels, "packets": "tx", "enabled": "", "version": "", "name": ""}
+                **{
+                    **self.const_labels,
+                    "packets": "tx",
+                    "enabled": "",
+                    "version": "",
+                    "name": "",
+                }
             ).set(plugin_data.get("tx", 0))
             self._metrics[PLUGINS_METRICS][plugin_name].labels(
-                **{**self.const_labels, "packets": "rx", "enabled": "", "version": "", "name": ""}
+                **{
+                    **self.const_labels,
+                    "packets": "rx",
+                    "enabled": "",
+                    "version": "",
+                    "name": "",
+                }
             ).set(plugin_data.get("rx", 0))
             self._metrics[PLUGINS_METRICS][plugin_name].labels(
-                **{**self.const_labels, "packets": "", "enabled": str(plugins_list[plugin]["enabled"]), "version": "", "name": ""}
+                **{
+                    **self.const_labels,
+                    "packets": "",
+                    "enabled": str(plugins_list[plugin]["enabled"]),
+                    "version": "",
+                    "name": "",
+                }
             ).set(1.0)
             self._metrics[PLUGINS_METRICS][plugin_name].labels(
-                **{**self.const_labels, "packets": "", "enabled": "", "version": str(plugins_list[plugin]["version"]), "name": ""}
+                **{
+                    **self.const_labels,
+                    "packets": "",
+                    "enabled": "",
+                    "version": str(plugins_list[plugin]["version"]),
+                    "name": "",
+                }
             ).set(1.0)
             self._metrics[PLUGINS_METRICS][plugin_name].labels(
-                **{**self.const_labels, "packets": "", "enabled": "", "version": "", "name": plugin}
+                **{
+                    **self.const_labels,
+                    "packets": "",
+                    "enabled": "",
+                    "version": "",
+                    "name": plugin,
+                }
             ).set(1.0)
