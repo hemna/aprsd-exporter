@@ -13,7 +13,6 @@ from asyncio.events import AbstractEventLoop
 import requests
 from flask import Flask, jsonify, request
 from loguru import logger
-from oslo_config import cfg
 from prometheus_client import Gauge, start_http_server
 
 APRSD_STATS = "aprsd"
