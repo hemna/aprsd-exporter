@@ -21,7 +21,8 @@ WORKDIR /app
 RUN uv venv
 RUN uv pip install git+https://github.com/hemna/aprsd-exporter.git
 
-ADD setup.sh /app/setup.sh
+COPY setup.sh /app/setup.sh
+RUN chmod +x /app/setup.sh
 
 EXPOSE 8080
 
