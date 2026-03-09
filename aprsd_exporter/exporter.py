@@ -1,7 +1,9 @@
 import asyncio
 import gc
+import json
 import linecache
 import os
+import pickle
 import resource
 import socket
 import threading
@@ -9,7 +11,6 @@ import tracemalloc
 from asyncio.events import AbstractEventLoop
 
 import requests
-from aprsd.threads.stats import StatsStore
 from flask import Flask, jsonify, request
 from loguru import logger
 from oslo_config import cfg
@@ -329,31 +330,94 @@ class APRSDExporter:
             self.memory_logger,
         )
 
+    def _load_stats_file(self, filepath: str) -> dict | None:
+        """Load stats from a file, detecting JSON or pickle format.
+
+        Args:
+            filepath: Path to the stats file
+
+        Returns:
+            Dictionary containing stats data, or None on error
+        """
+        if not os.path.exists(filepath):
+            logger.error(f"Stats file not found: {filepath}")
+            return None
+
+        # Detect file type by extension first
+        _, ext = os.path.splitext(filepath)
+        ext = ext.lower()
+
+        if ext == ".json":
+            return self._load_json_stats(filepath)
+        elif ext in (".p", ".pickle", ".pkl"):
+            return self._load_pickle_stats(filepath)
+        else:
+            # Try to detect by content
+            logger.info(f"Unknown extension '{ext}', attempting to detect file format")
+            return self._load_stats_by_content(filepath)
+
+    def _load_json_stats(self, filepath: str) -> dict | None:
+        """Load stats from a JSON file."""
+        logger.info(f"Loading stats as JSON from: {filepath}")
+        try:
+            with open(filepath, "r") as f:
+                data = json.load(f)
+            return data
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON file {filepath}: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Error reading JSON file {filepath}: {e}")
+            return None
+
+    def _load_pickle_stats(self, filepath: str) -> dict | None:
+        """Load stats from a pickle file."""
+        logger.info(f"Loading stats as pickle from: {filepath}")
+        try:
+            with open(filepath, "rb") as f:
+                data = pickle.load(f)
+            return data
+        except Exception as e:
+            logger.error(f"Error reading pickle file {filepath}: {e}")
+            return None
+
+    def _load_stats_by_content(self, filepath: str) -> dict | None:
+        """Attempt to detect file format by content and load accordingly."""
+        # Try JSON first (more common now)
+        try:
+            with open(filepath, "r") as f:
+                data = json.load(f)
+            logger.info("Successfully loaded file as JSON")
+            return data
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            pass
+        except Exception as e:
+            logger.debug(f"JSON load failed: {e}")
+
+        # Try pickle
+        try:
+            with open(filepath, "rb") as f:
+                data = pickle.load(f)
+            logger.info("Successfully loaded file as pickle")
+            return data
+        except Exception as e:
+            logger.error(f"Failed to load file as either JSON or pickle: {e}")
+            return None
+
     def collect_metrics(self):
         logger.info("collect_metrics")
         if self.stats_file:
             logger.info(f"Loading stats from file: {self.stats_file}")
             try:
-                # Temporarily set save_location to the directory of the file
-                original_save_location = cfg.CONF.save_location
-                cfg.CONF.save_location = os.path.dirname(self.stats_file)
-                ss = StatsStore()
-                ss.load()
-                # Restore
-                cfg.CONF.save_location = original_save_location
+                stats_data = self._load_stats_file(self.stats_file)
+                if stats_data is None:
+                    return None
                 # Verify we have valid stats data
-                if not ss.data or "APRSDStats" not in ss.data:
+                if not stats_data or "APRSDStats" not in stats_data:
                     logger.warning("Stats file loaded but contains no valid data")
-                    # Explicitly delete to free memory
-                    del ss
                     return None
                 # Wrap in the same format as HTTP response
-                # Note: We keep a reference to ss.data, but ss itself can be GC'd
-                # The data will be processed and then explicitly deleted in update_metrics()
-                stats_obj = {"stats": ss.data}
-                # Delete the StatsStore object (data is still referenced by stats_obj)
-                # This allows Python to free any other memory used by the StatsStore object
-                del ss
+                stats_obj = {"stats": stats_data}
                 return stats_obj
             except Exception as e:
                 logger.error(f"Error loading stats from file {self.stats_file}: {e}")
