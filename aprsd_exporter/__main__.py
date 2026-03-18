@@ -144,7 +144,7 @@ def main(
     max_seen_callsigns,
 ):
     """Run prometheus exporter"""
-    tracemalloc.start()
+    tracemalloc.start(1)  # Limit to 1 frame to reduce memory overhead
     logging.getLogger("asyncio").setLevel(logging.ERROR)
     logging.getLogger("aiohttp").setLevel(logging.DEBUG)
     logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
